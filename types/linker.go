@@ -1,0 +1,114 @@
+package types
+
+import (
+	"fmt"
+	"iter"
+
+	"github.com/Compogo/compogo/tools"
+)
+
+type LinkKey interface {
+	fmt.Stringer
+	comparable
+}
+
+type Link[T LinkKey, I any] struct {
+	Key   T
+	Value I
+}
+
+func NewLink[T LinkKey, I any](key T, value I) *Link[T, I] {
+	return &Link[T, I]{Key: key, Value: value}
+}
+
+// Linker stores typed values (I) indexed by keys of type T.
+// It combines a Mapper for case-insensitive string lookups with
+// a direct key→value map, allowing access both by string name
+// and by typed key.
+//
+// This is useful for plugin systems, strategy patterns, or any
+// scenario where you need to select implementations by name
+// while maintaining type safety.
+//
+// Example:
+//
+//	//go:generate stringer -type=Driver
+//
+//	type Driver uint8
+//	const (
+//	    Postgres Driver = 0
+//	    MySQL    Driver = 1
+//	)
+//
+//	linker := NewLinker(
+//	    NewLink(Postgres, &PGDriver{}),
+//	    NewLink(MySQL, &MySQLDriver{}),
+//	)
+//	driver, _ := linker.GetByName("postgres") // returns &PGDriver{}
+type Linker[T LinkKey, I any] struct {
+	mapper    *Mapper[T]
+	values    map[T]I
+	typeName  string
+	zeroValue I
+}
+
+func NewLinker[T LinkKey, I any](links ...*Link[T, I]) *Linker[T, I] {
+	enum := &Linker[T, I]{
+		mapper:    NewMapper[T](),
+		values:    make(map[T]I),
+		typeName:  fmt.Sprintf("Linker[%s, %s]", tools.TypeName[T](), tools.TypeName[I]()),
+		zeroValue: *new(I),
+	}
+
+	for _, impl := range links {
+		enum.Add(impl.Key, impl.Value)
+	}
+
+	return enum
+}
+
+func (linker *Linker[T, I]) GetMapper() *Mapper[T] {
+	return linker.mapper
+}
+
+func (linker *Linker[T, I]) Add(key T, value I) {
+	linker.mapper.Add(key)
+	linker.values[key] = value
+}
+
+func (linker *Linker[T, I]) GetByName(keyName string) (I, error) {
+	key, err := linker.mapper.Get(keyName)
+	if err != nil {
+		return linker.zeroValue, err
+	}
+
+	return linker.Get(key)
+}
+
+func (linker *Linker[T, I]) Get(key T) (I, error) {
+	if val, exists := linker.values[key]; exists {
+		return val, nil
+	}
+
+	return linker.zeroValue, fmt.Errorf("key %s %w for type %s", key, DoesNotExistError, linker.typeName)
+}
+
+func (linker *Linker[T, I]) HasByKey(key T) bool {
+	_, exists := linker.values[key]
+	return exists
+}
+
+func (linker *Linker[T, I]) Remove(key T) {
+	delete(linker.values, key)
+	linker.mapper.RemoveByValue(key)
+}
+
+func (linker *Linker[T, I]) All() iter.Seq2[T, I] {
+	return func(yield func(T, I) bool) {
+		for key, value := range linker.values {
+			if !yield(key, value) {
+				return
+			}
+		}
+	}
+}
