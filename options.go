@@ -44,7 +44,13 @@ func withConfig(config *Config) Option {
 				})
 			}),
 			PreRun: component.StepFunc(func(container container.Container) error {
-				return container.Invoke(Configuration)
+				if err := container.Invoke(Configuration); err != nil {
+					return err
+				}
+
+				return container.Invoke(func(config *Config) {
+					config.Name = app.name
+				})
 			}),
 		}
 	}
