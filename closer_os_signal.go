@@ -56,7 +56,7 @@ func WithOsSignalCloser() Option {
 	closer := NewCloserOsSignal()
 
 	return WithCloser(closer, &component.Component{
-		Init: component.InitFunc(func(container container.Container) error {
+		Init: component.StepFunc(func(container container.Container) error {
 			return container.Provides(
 				func() *CloserOsSignal { return closer },
 				func(cl *CloserOsSignal) closer2.Closer { return cl },

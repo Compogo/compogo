@@ -8,20 +8,21 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[PreRun-0]
-	_ = x[Run-1]
-	_ = x[PostRun-2]
-	_ = x[PreWait-3]
-	_ = x[Wait-4]
-	_ = x[PostWait-5]
-	_ = x[PreStop-6]
-	_ = x[Stop-7]
-	_ = x[PostStop-8]
+	_ = x[Init-0]
+	_ = x[PreRun-1]
+	_ = x[Run-2]
+	_ = x[PostRun-3]
+	_ = x[PreWait-4]
+	_ = x[Wait-5]
+	_ = x[PostWait-6]
+	_ = x[PreStop-7]
+	_ = x[Stop-8]
+	_ = x[PostStop-9]
 }
 
-const _Step_name = "PreRunRunPostRunPreWaitWaitPostWaitPreStopStopPostStop"
+const _Step_name = "InitPreRunRunPostRunPreWaitWaitPostWaitPreStopStopPostStop"
 
-var _Step_index = [...]uint8{0, 6, 9, 16, 23, 27, 35, 42, 46, 54}
+var _Step_index = [...]uint8{0, 4, 10, 13, 20, 27, 31, 39, 46, 50, 58}
 
 func (i Step) String() string {
 	idx := int(i) - 0

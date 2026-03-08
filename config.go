@@ -14,6 +14,8 @@ const (
 	ContainerNameFieldName = "container.name"
 	HostnameFieldName      = "hostname"
 
+	InitDurationFieldName = "compogo.duration.init"
+
 	PreRunDurationFieldName  = "compogo.duration.run.pre"
 	RunDurationFieldName     = "compogo.duration.run.run"
 	PostRunDurationFieldName = "compogo.duration.run.post"
@@ -30,6 +32,8 @@ const (
 	ContainerIdDefault   = "unknown-container_id"
 	ContainerNameDefault = "unknown-container_name"
 	HostnameDefault      = "unknown-hostname"
+
+	InitDurationDefault = 100 * time.Millisecond
 
 	PreRunDurationDefault  = 100 * time.Millisecond
 	RunDurationDefault     = 100 * time.Millisecond
@@ -55,6 +59,8 @@ type Config struct {
 	Hostname      string
 
 	// Duration
+	InitDuration time.Duration
+
 	PreRunDuration  time.Duration
 	RunDuration     time.Duration
 	PostRunDuration time.Duration
@@ -97,6 +103,11 @@ func Configuration(config *Config, configurator configurator.Configurator) *Conf
 	if config.Hostname == "" || config.Hostname == HostnameDefault {
 		configurator.SetDefault(HostnameFieldName, HostnameDefault)
 		config.Hostname = configurator.GetString(HostnameFieldName)
+	}
+
+	if config.InitDuration == 0 || config.InitDuration == InitDurationDefault {
+		configurator.SetDefault(InitDurationFieldName, InitDurationDefault)
+		config.InitDuration = configurator.GetDuration(InitDurationFieldName)
 	}
 
 	if config.PreRunDuration == 0 || config.PreRunDuration == PreRunDurationDefault {

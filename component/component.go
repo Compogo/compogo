@@ -5,11 +5,6 @@ import (
 	"github.com/Compogo/compogo/flag"
 )
 
-// InitFunc performs initial setup and registers services in the DI container.
-// It is called during the initialization phase before any other steps,
-// and does not receive a context as it must complete synchronously.
-type InitFunc func(container container.Container) error
-
 // StepFunc defines a function that executes at a specific lifecycle step.
 // It receives the DI container which should already contain all initialized dependencies.
 type StepFunc func(container container.Container) error
@@ -31,7 +26,7 @@ type Component struct {
 	Dependencies Components
 
 	// Init performs initial setup and registers services in the container
-	Init InitFunc
+	Init StepFunc
 	// BindFlags registers component-specific command-line flags
 	BindFlags BindFlags
 

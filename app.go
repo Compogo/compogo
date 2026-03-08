@@ -41,6 +41,8 @@ type App struct {
 
 	bindFlags types.Set[*component.Component]
 
+	init types.Set[*component.Component]
+
 	preRun  types.Set[*component.Component]
 	run     types.Set[*component.Component]
 	postRun types.Set[*component.Component]
@@ -93,10 +95,6 @@ func (app *App) AddComponents(components ...*component.Component) (err error) {
 		}
 
 		if !app.existComponent(cmp) {
-			if err = cmp.Init(app.container); err != nil {
-				return err
-			}
-
 			app.components.Add(cmp)
 		}
 	}
@@ -165,11 +163,11 @@ func (app *App) Serve() (err error) {
 	app.setRunning(true)
 	defer app.setRunning(false)
 
-	components := app.getAllComponents()
-
-	if err = app.runComponents(component.PreRun, component.Run, component.PostRun, component.PreWait); err != nil {
+	if err = app.runComponents(component.Init, component.PreRun, component.Run, component.PostRun, component.PreWait); err != nil {
 		return err
 	}
+
+	components := app.getAllComponents()
 
 	chainErr := make(chan error)
 	defer close(chainErr)
@@ -266,6 +264,16 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 		}
 
 		switch step {
+		case component.Init:
+			if app.init.Contains(cmp) {
+				continue
+			}
+
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.InitDuration)
+			fnc = cmp.Init
+
+			app.init.Add(cmp)
+
 		// run
 		case component.PreRun:
 			if app.preRun.Contains(cmp) {

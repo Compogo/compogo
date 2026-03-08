@@ -20,7 +20,7 @@ func withConfig(config *Config) Option {
 		app.config = config
 
 		app.configCmp = &component.Component{
-			Init: component.InitFunc(func(container container.Container) error {
+			Init: component.StepFunc(func(container container.Container) error {
 				return container.Provide(func() *Config { return config })
 			}),
 			BindFlags: component.BindFlags(func(flagSet flag.FlagSet, container container.Container) error {
@@ -30,6 +30,8 @@ func withConfig(config *Config) Option {
 					flagSet.StringVar(&config.ContainerId, ContainerIdFieldName, ContainerIdDefault, "application container id")
 					flagSet.StringVar(&config.ContainerName, ContainerNameFieldName, ContainerNameDefault, "application container name")
 					flagSet.StringVar(&config.Hostname, HostnameFieldName, HostnameDefault, "application hostname")
+
+					flagSet.DurationVar(&config.InitDuration, InitDurationFieldName, InitDurationDefault, "maximum time to wait for a component's response at the init step")
 
 					flagSet.DurationVar(&config.PreRunDuration, PreRunDurationFieldName, PreRunDurationDefault, "maximum time to wait for a component's response at the pre-run step")
 					flagSet.DurationVar(&config.RunDuration, RunDurationFieldName, RunDurationDefault, "maximum time to wait for a component's response at the run step")

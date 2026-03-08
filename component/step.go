@@ -3,7 +3,9 @@ package component
 //go:generate stringer -type=Step
 
 const (
-	PreRun Step = iota
+	Init Step = iota
+
+	PreRun
 	Run
 	PostRun
 

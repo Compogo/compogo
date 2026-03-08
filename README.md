@@ -56,13 +56,13 @@ var Component = &component.Component{
 }
 ```
 
-### 📋 9-шаговый жизненный цикл
+### 📋 10-шаговый жизненный цикл
 
-`PreRun → Run → PostRun → PreWait → Wait → PostWait → PreStop → Stop → PostStop`
+`Init → PreRun → Run → PostRun → PreWait → Wait → PostWait → PreStop → Stop → PostStop`
 
 ### ⏱️ Таймауты на каждый шаг
 
-Каждый этап имеет свой таймаут — никакой шаг не зависнет навсегда.
+Каждый этап имеет свой таймаут.
 
 ### 🔌 Graceful shutdown из коробки
 
