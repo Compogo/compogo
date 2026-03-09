@@ -263,10 +263,6 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 			}
 		}
 
-		if !app.components.Contains(cmp) {
-			continue
-		}
-
 		switch step {
 		case component.Init:
 			if app.init.Contains(cmp) {
