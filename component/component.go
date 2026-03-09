@@ -1,6 +1,8 @@
 package component
 
 import (
+	"context"
+
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
 )
@@ -8,6 +10,8 @@ import (
 // StepFunc defines a function that executes at a specific lifecycle step.
 // It receives the DI container which should already contain all initialized dependencies.
 type StepFunc func(container container.Container) error
+
+type WaitFunc func(ctx context.Context, container container.Container) error
 
 // BindFlags defines a function for registering command-line flags.
 // Called during the flag binding phase before any step execution.
@@ -40,7 +44,7 @@ type Component struct {
 	// PreWait executes before entering wait state
 	PreWait StepFunc
 	// Wait typically blocks for signals or async operations
-	Wait StepFunc
+	Wait WaitFunc
 	// PostWait executes after wait state
 	PostWait StepFunc
 

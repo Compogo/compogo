@@ -202,7 +202,7 @@ func (app *App) Serve() (err error) {
 	defer cancelFunc()
 
 	for _, cmp := range components {
-		app.serveComponent(cmp, chainErr)
+		app.serveComponent(ctx, cmp, chainErr)
 	}
 
 	if err = app.runComponents(component.PostWait); err != nil {
@@ -398,7 +398,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 	return nil
 }
 
-func (app *App) serveComponent(cmp *component.Component, chainErr chan error) {
+func (app *App) serveComponent(ctx context.Context, cmp *component.Component, chainErr chan error) {
 	app.waitMutex.Lock()
 	defer app.waitMutex.Unlock()
 
@@ -408,7 +408,7 @@ func (app *App) serveComponent(cmp *component.Component, chainErr chan error) {
 
 	app.wg.Add(1)
 	app.wait.Add(cmp)
-	go func(cmp *component.Component) {
+	go func(ctx context.Context, cmp *component.Component) {
 		defer app.wg.Done()
 		defer func() {
 			app.waitMutex.Lock()
@@ -422,10 +422,13 @@ func (app *App) serveComponent(cmp *component.Component, chainErr chan error) {
 			}
 		}()
 
-		if err := cmp.Wait(app.container); err != nil {
+		ctx, cancelFunc := context.WithCancel(ctx)
+		defer cancelFunc()
+
+		if err := cmp.Wait(ctx, app.container); err != nil {
 			chainErr <- fmt.Errorf("[compogo][%s] component '%s' wait failed: %w", app.name, cmp.Name, err)
 		}
-	}(cmp)
+	}(ctx, cmp)
 }
 
 func (app *App) getAllComponents() []*component.Component {

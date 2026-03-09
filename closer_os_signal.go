@@ -62,7 +62,7 @@ func WithOsSignalCloser() Option {
 				func(cl *CloserOsSignal) closer2.Closer { return cl },
 			)
 		}),
-		Wait: component.StepFunc(func(container container.Container) error {
+		Wait: component.WaitFunc(func(_ context.Context, container container.Container) error {
 			return container.Invoke(func(cl *CloserOsSignal) {
 				cl.Serve()
 			})
