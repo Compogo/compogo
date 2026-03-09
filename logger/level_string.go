@@ -9,16 +9,15 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[Panic-0]
-	_ = x[Fatal-1]
-	_ = x[Error-2]
-	_ = x[Warn-3]
-	_ = x[Info-4]
-	_ = x[Debug-5]
+	_ = x[Error-1]
+	_ = x[Warn-2]
+	_ = x[Info-3]
+	_ = x[Debug-4]
 }
 
-const _Level_name = "PanicFatalErrorWarnInfoDebug"
+const _Level_name = "PanicErrorWarnInfoDebug"
 
-var _Level_index = [...]uint8{0, 5, 10, 15, 19, 23, 28}
+var _Level_index = [...]uint8{0, 5, 10, 14, 18, 23}
 
 func (i Level) String() string {
 	idx := int(i) - 0
