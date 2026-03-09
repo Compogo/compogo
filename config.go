@@ -74,7 +74,17 @@ type Config struct {
 }
 
 func NewConfig() *Config {
-	return &Config{}
+	return &Config{
+		InitDuration:     InitDurationDefault,
+		PreRunDuration:   PreRunDurationDefault,
+		RunDuration:      RunDurationDefault,
+		PostRunDuration:  PostRunDurationDefault,
+		PreWaitDuration:  PreWaitDurationDefault,
+		PostWaitDuration: PostWaitDurationDefault,
+		PreStopDuration:  PreStopDurationDefault,
+		StopDuration:     StopDurationDefault,
+		PostStopDuration: PostStopDurationDefault,
+	}
 }
 
 func Configuration(config *Config, configurator configurator.Configurator) *Config {

@@ -222,24 +222,24 @@ func (app *App) runComponents(steps ...component.Step) (err error) {
 
 	components := app.components.ToSlice()
 
-	if app.configuratorCmp != nil {
-		components = append([]*component.Component{app.configuratorCmp}, components...)
-	}
-
-	if app.containerCmp != nil {
-		components = append([]*component.Component{app.containerCmp}, components...)
-	}
-
-	if app.configCmp != nil {
-		components = append([]*component.Component{app.configCmp}, components...)
+	if app.loggerCmp != nil {
+		components = append([]*component.Component{app.loggerCmp}, components...)
 	}
 
 	if app.closerCmp != nil {
 		components = append([]*component.Component{app.closerCmp}, components...)
 	}
 
-	if app.loggerCmp != nil {
-		components = append([]*component.Component{app.loggerCmp}, components...)
+	if app.configCmp != nil {
+		components = append([]*component.Component{app.configCmp}, components...)
+	}
+
+	if app.containerCmp != nil {
+		components = append([]*component.Component{app.containerCmp}, components...)
+	}
+
+	if app.configuratorCmp != nil {
+		components = append([]*component.Component{app.configuratorCmp}, components...)
 	}
 
 	for _, step := range steps {
@@ -358,6 +358,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 		}
 
 		if fnc == nil {
+			cancelFunc()
 			continue
 		}
 
