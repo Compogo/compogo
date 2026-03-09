@@ -20,7 +20,9 @@ type CloserOsSignal struct {
 }
 
 func NewCloserOsSignal() *CloserOsSignal {
-	closer := &CloserOsSignal{}
+	closer := &CloserOsSignal{
+		exitSignal: make(chan os.Signal, 1),
+	}
 
 	closer.ctx, closer.cancelFunc = context.WithCancel(context.Background())
 
