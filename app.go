@@ -134,7 +134,7 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 	}
 
 	for cmp := range app.components {
-		if !app.bindFlags.Contains(cmp) {
+		if !app.bindFlags.Contains(cmp) && cmp.BindFlags != nil {
 			if err = cmp.BindFlags(flagSet, app.container); err != nil {
 				return err
 			}
