@@ -133,7 +133,29 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 		}
 	}
 
-	for cmp := range app.components {
+	components := app.components.ToSlice()
+
+	if app.loggerCmp != nil {
+		components = append([]*component.Component{app.loggerCmp}, components...)
+	}
+
+	if app.closerCmp != nil {
+		components = append([]*component.Component{app.closerCmp}, components...)
+	}
+
+	if app.configCmp != nil {
+		components = append([]*component.Component{app.configCmp}, components...)
+	}
+
+	if app.containerCmp != nil {
+		components = append([]*component.Component{app.containerCmp}, components...)
+	}
+
+	if app.configuratorCmp != nil {
+		components = append([]*component.Component{app.configuratorCmp}, components...)
+	}
+
+	for _, cmp := range components {
 		if !app.bindFlags.Contains(cmp) && cmp.BindFlags != nil {
 			if err = cmp.BindFlags(flagSet, app.container); err != nil {
 				return err
