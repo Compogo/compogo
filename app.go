@@ -123,6 +123,10 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 		return fmt.Errorf("[compogo][%s].BindFlags: %w", app.name, AppIsRunningError)
 	}
 
+	if err = app.runComponents(component.Init); err != nil {
+		return fmt.Errorf("[compogo][%s].BindFlags: %w", app.name, err)
+	}
+
 	if app.parent != nil {
 		if err = app.parent.BindFlags(flagSet); err != nil {
 			return err
