@@ -439,6 +439,27 @@ func (app *App) getAllComponents() []*component.Component {
 	}
 
 	components = append(components, app.components.ToSlice()...)
+
+	if app.loggerCmp != nil {
+		components = append([]*component.Component{app.loggerCmp}, components...)
+	}
+
+	if app.closerCmp != nil {
+		components = append([]*component.Component{app.closerCmp}, components...)
+	}
+
+	if app.configCmp != nil {
+		components = append([]*component.Component{app.configCmp}, components...)
+	}
+
+	if app.containerCmp != nil {
+		components = append([]*component.Component{app.containerCmp}, components...)
+	}
+
+	if app.configuratorCmp != nil {
+		components = append([]*component.Component{app.configuratorCmp}, components...)
+	}
+
 	return components
 }
 
