@@ -20,6 +20,7 @@ func withConfig(config *Config) Option {
 		app.config = config
 
 		app.configCmp = &component.Component{
+			Name: "compogo.Config",
 			Init: component.StepFunc(func(container container.Container) error {
 				return container.Provide(func() *Config { return config })
 			}),
