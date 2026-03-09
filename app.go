@@ -133,27 +133,8 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 		}
 	}
 
-	components := app.components.ToSlice()
-
-	if app.loggerCmp != nil {
-		components = append([]*component.Component{app.loggerCmp}, components...)
-	}
-
-	if app.closerCmp != nil {
-		components = append([]*component.Component{app.closerCmp}, components...)
-	}
-
-	if app.configCmp != nil {
-		components = append([]*component.Component{app.configCmp}, components...)
-	}
-
-	if app.containerCmp != nil {
-		components = append([]*component.Component{app.containerCmp}, components...)
-	}
-
-	if app.configuratorCmp != nil {
-		components = append([]*component.Component{app.configuratorCmp}, components...)
-	}
+	components := app.getCoreComponents()
+	components = append(components, app.components.ToSlice()...)
 
 	for _, cmp := range components {
 		if !app.bindFlags.Contains(cmp) && cmp.BindFlags != nil {
@@ -242,27 +223,8 @@ func (app *App) runComponents(steps ...component.Step) (err error) {
 		}
 	}
 
-	components := app.components.ToSlice()
-
-	if app.loggerCmp != nil {
-		components = append([]*component.Component{app.loggerCmp}, components...)
-	}
-
-	if app.closerCmp != nil {
-		components = append([]*component.Component{app.closerCmp}, components...)
-	}
-
-	if app.configCmp != nil {
-		components = append([]*component.Component{app.configCmp}, components...)
-	}
-
-	if app.containerCmp != nil {
-		components = append([]*component.Component{app.containerCmp}, components...)
-	}
-
-	if app.configuratorCmp != nil {
-		components = append([]*component.Component{app.configuratorCmp}, components...)
-	}
+	components := app.getCoreComponents()
+	components = append(components, app.components.ToSlice()...)
 
 	for _, step := range steps {
 		if err = app.runStepComponents(step, components...); err != nil {
@@ -432,33 +394,13 @@ func (app *App) serveComponent(ctx context.Context, cmp *component.Component, ch
 }
 
 func (app *App) getAllComponents() []*component.Component {
-	var components []*component.Component
+	components := app.getCoreComponents()
 
 	if app.parent != nil {
 		components = append(components, app.parent.getAllComponents()...)
 	}
 
 	components = append(components, app.components.ToSlice()...)
-
-	if app.loggerCmp != nil {
-		components = append([]*component.Component{app.loggerCmp}, components...)
-	}
-
-	if app.closerCmp != nil {
-		components = append([]*component.Component{app.closerCmp}, components...)
-	}
-
-	if app.configCmp != nil {
-		components = append([]*component.Component{app.configCmp}, components...)
-	}
-
-	if app.containerCmp != nil {
-		components = append([]*component.Component{app.containerCmp}, components...)
-	}
-
-	if app.configuratorCmp != nil {
-		components = append([]*component.Component{app.configuratorCmp}, components...)
-	}
 
 	return components
 }
@@ -526,5 +468,19 @@ func (app *App) Clone(name string) *App {
 		closer:       app.closer,
 		logger:       app.logger.GetLogger(name),
 		parent:       app,
+	}
+}
+
+func (app *App) getCoreComponents() []*component.Component {
+	if app.configCmp == nil {
+		return nil
+	}
+
+	return []*component.Component{
+		app.configuratorCmp,
+		app.containerCmp,
+		app.configCmp,
+		app.closerCmp,
+		app.loggerCmp,
 	}
 }
