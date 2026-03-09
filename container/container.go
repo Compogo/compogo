@@ -1,7 +1,7 @@
 package container
 
 type Container interface {
-	Provide(any) error
-	Provides(...any) error
-	Invoke(any) error
+	Provide(interface{}) error
+	Provides(...interface{}) error
+	Invoke(interface{}) error
 }
