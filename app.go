@@ -176,7 +176,7 @@ func (app *App) Serve() (err error) {
 
 	components := app.getAllComponents()
 
-	chainErr := make(chan error)
+	chainErr := make(chan error, 1)
 	defer close(chainErr)
 
 	ctx, cancelFunc := context.WithCancel(app.closer.GetContext())
@@ -239,6 +239,9 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 	var ctx context.Context
 	var cancelFunc context.CancelFunc
 	var fnc component.StepFunc
+
+	errChan := make(chan error, 1)
+	defer close(errChan)
 
 	for _, cmp := range components {
 		if len(cmp.Dependencies) > 0 {
@@ -344,16 +347,20 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 
 		go func() {
 			defer cancelFunc()
-			err = fnc(app.container)
+			if err := fnc(app.container); err != nil {
+				errChan <- err
+			}
 		}()
 
-		<-ctx.Done()
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return fmt.Errorf("[compogo][%s] component - '%s', step - '%s', failed: %w", app.name, cmp.Name, step, ComponentStepTimeoutError)
+		select {
+		case <-ctx.Done():
+			break
+		case err := <-errChan:
+			return err
 		}
 
-		if err != nil {
-			return err
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("[compogo][%s] component - '%s', step - '%s', failed: %w", app.name, cmp.Name, step, ComponentStepTimeoutError)
 		}
 	}
 
