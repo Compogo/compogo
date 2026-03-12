@@ -9,10 +9,10 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[Init-0]
-	_ = x[Configurate-1]
-	_ = x[PreRun-2]
-	_ = x[Run-3]
-	_ = x[PostRun-4]
+	_ = x[Configuration-1]
+	_ = x[PreExecute-2]
+	_ = x[Execute-3]
+	_ = x[PostExecute-4]
 	_ = x[PreWait-5]
 	_ = x[Wait-6]
 	_ = x[PostWait-7]
@@ -21,9 +21,9 @@ func _() {
 	_ = x[PostStop-10]
 }
 
-const _Step_name = "InitConfiguratePreRunRunPostRunPreWaitWaitPostWaitPreStopStopPostStop"
+const _Step_name = "InitConfigurationPreExecuteExecutePostExecutePreWaitWaitPostWaitPreStopStopPostStop"
 
-var _Step_index = [...]uint8{0, 4, 15, 21, 24, 31, 38, 42, 50, 57, 61, 69}
+var _Step_index = [...]uint8{0, 4, 17, 27, 34, 45, 52, 56, 64, 71, 75, 83}
 
 func (i Step) String() string {
 	idx := int(i) - 0
