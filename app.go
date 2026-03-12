@@ -202,7 +202,7 @@ func (app *App) Serve() (err error) {
 		break
 	}
 
-	app.logger.Infof("[compogo][%s] Shutdown", app.name)
+	app.logger.Info("Shutdown")
 
 	if err = app.runComponents(component.PreStop, component.Stop, component.PostStop); err != nil {
 		return err
