@@ -31,15 +31,18 @@ type Component struct {
 
 	// Init performs initial setup and registers services in the container
 	Init StepFunc
+
+	Configuration StepFunc
+
 	// BindFlags registers component-specific command-line flags
 	BindFlags BindFlags
 
-	// PreRun executes before the main Run step
-	PreRun StepFunc
-	// Run contains the main component logic
-	Run StepFunc
-	// PostRun executes after the main Run step
-	PostRun StepFunc
+	// PreExecute executes before the main Execute step
+	PreExecute StepFunc
+	// Execute contains the main component logic
+	Execute StepFunc
+	// PostExecute executes after the main Execute step
+	PostExecute StepFunc
 
 	// PreWait executes before entering wait state
 	PreWait StepFunc

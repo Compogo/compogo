@@ -33,6 +33,7 @@ func withConfig(config *Config) Option {
 					flagSet.StringVar(&config.Hostname, HostnameFieldName, HostnameDefault, "application hostname")
 
 					flagSet.DurationVar(&config.InitDuration, InitDurationFieldName, InitDurationDefault, "maximum time to wait for a component's response at the init step")
+					flagSet.DurationVar(&config.ConfigurationDuration, ConfigurationDurationFieldName, ConfigurationDurationDefault, "maximum time to wait for a component's response at the configuration step")
 
 					flagSet.DurationVar(&config.PreRunDuration, PreRunDurationFieldName, PreRunDurationDefault, "maximum time to wait for a component's response at the pre-run step")
 					flagSet.DurationVar(&config.RunDuration, RunDurationFieldName, RunDurationDefault, "maximum time to wait for a component's response at the run step")
@@ -46,7 +47,7 @@ func withConfig(config *Config) Option {
 					flagSet.DurationVar(&config.PostStopDuration, PostStopDurationFieldName, PostStopDurationDefault, "maximum time to wait for a component's response at the post-stop step")
 				})
 			}),
-			PreRun: component.StepFunc(func(container container.Container) error {
+			PreExecute: component.StepFunc(func(container container.Container) error {
 				if err := container.Invoke(Configuration); err != nil {
 					return err
 				}

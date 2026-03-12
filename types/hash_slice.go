@@ -39,14 +39,14 @@ var (
 // Trying to add duplicate returns AlreadyExistsError
 //
 //	_, err := hs.Add(StatusActive)
-type HashSlice[T LinkKey] struct {
+type HashSlice[T comparable] struct {
 	linker    *Linker[T, int]
 	items     []T
 	typeName  string
 	zeroValue T
 }
 
-func NewHashSlice[T LinkKey](items ...T) (*HashSlice[T], error) {
+func NewHashSlice[T comparable](items ...T) (*HashSlice[T], error) {
 	hs := &HashSlice[T]{
 		linker:    NewLinker[T, int](),
 		items:     make([]T, 0, len(items)),
@@ -69,7 +69,7 @@ func (hs *HashSlice[T]) Len() int {
 }
 
 func (hs *HashSlice[T]) Add(item T) (int, error) {
-	if hs.linker.HasByKey(item) {
+	if hs.linker.Has(item) {
 		return 0, fmt.Errorf("%s item %v %w", hs.typeName, item, AlreadyExistsError)
 	}
 
@@ -94,7 +94,7 @@ func (hs *HashSlice[T]) Items() []T {
 }
 
 func (hs *HashSlice[T]) IndexOf(item T) int {
-	if !hs.linker.HasByKey(item) {
+	if !hs.linker.Has(item) {
 		return NoneIndex
 	}
 
@@ -125,7 +125,7 @@ func (hs *HashSlice[T]) RemoveByIndex(index int) {
 }
 
 func (hs *HashSlice[T]) Contains(item T) bool {
-	return hs.linker.HasByKey(item)
+	return hs.linker.Has(item)
 }
 
 func (hs *HashSlice[T]) All() iter.Seq2[int, T] {

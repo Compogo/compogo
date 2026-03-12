@@ -41,7 +41,8 @@ type App struct {
 
 	bindFlags types.Set[*component.Component]
 
-	init types.Set[*component.Component]
+	init          types.Set[*component.Component]
+	configuration types.Set[*component.Component]
 
 	preRun  types.Set[*component.Component]
 	run     types.Set[*component.Component]
@@ -150,7 +151,7 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 }
 
 // Serve starts the application and runs all components through their lifecycle:
-// 1. Sequential execution of PreRun, Run, PostRun, PreWait
+// 1. Sequential execution of PreExecute, Execute, PostExecute, PreWait
 // 2. Concurrent execution of all Wait components
 // 3. Sequential execution of PostWait
 // 4. Wait for shutdown signal or first error
@@ -170,7 +171,7 @@ func (app *App) Serve() (err error) {
 	app.setRunning(true)
 	defer app.setRunning(false)
 
-	if err = app.runComponents(component.Init, component.PreRun, component.Run, component.PostRun, component.PreWait); err != nil {
+	if err = app.runComponents(component.Init, component.Configuration, component.PreExecute, component.Execute, component.PostExecute, component.PreWait); err != nil {
 		return err
 	}
 
@@ -251,6 +252,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 		}
 
 		switch step {
+		// init
 		case component.Init:
 			if app.init.Contains(cmp) {
 				continue
@@ -261,32 +263,42 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 
 			app.init.Add(cmp)
 
+		case component.Configuration:
+			if app.configuration.Contains(cmp) {
+				continue
+			}
+
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.ConfigurationDuration)
+			fnc = cmp.Configuration
+
+			app.configuration.Add(cmp)
+
 		// run
-		case component.PreRun:
+		case component.PreExecute:
 			if app.preRun.Contains(cmp) {
 				continue
 			}
 
 			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreRunDuration)
-			fnc = cmp.PreRun
+			fnc = cmp.PreExecute
 
 			app.preRun.Add(cmp)
-		case component.Run:
+		case component.Execute:
 			if app.run.Contains(cmp) {
 				continue
 			}
 
 			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.RunDuration)
-			fnc = cmp.Run
+			fnc = cmp.Execute
 
 			app.run.Add(cmp)
-		case component.PostRun:
+		case component.PostExecute:
 			if app.postRun.Contains(cmp) {
 				continue
 			}
 
 			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostRunDuration)
-			fnc = cmp.PostRun
+			fnc = cmp.PostExecute
 
 			app.postRun.Add(cmp)
 		// wait

@@ -7,17 +7,12 @@ import (
 	"github.com/Compogo/compogo/tools"
 )
 
-type LinkKey interface {
-	fmt.Stringer
-	comparable
-}
-
-type Link[T LinkKey, I any] struct {
+type Link[T comparable, I any] struct {
 	Key   T
 	Value I
 }
 
-func NewLink[T LinkKey, I any](key T, value I) *Link[T, I] {
+func NewLink[T comparable, I any](key T, value I) *Link[T, I] {
 	return &Link[T, I]{Key: key, Value: value}
 }
 
@@ -45,16 +40,14 @@ func NewLink[T LinkKey, I any](key T, value I) *Link[T, I] {
 //	    NewLink(MySQL, &MySQLDriver{}),
 //	)
 //	driver, _ := linker.GetByName("postgres") // returns &PGDriver{}
-type Linker[T LinkKey, I any] struct {
-	mapper    *Mapper[T]
+type Linker[T comparable, I any] struct {
 	values    map[T]I
 	typeName  string
 	zeroValue I
 }
 
-func NewLinker[T LinkKey, I any](links ...*Link[T, I]) *Linker[T, I] {
+func NewLinker[T comparable, I any](links ...*Link[T, I]) *Linker[T, I] {
 	enum := &Linker[T, I]{
-		mapper:    NewMapper[T](),
 		values:    make(map[T]I),
 		typeName:  fmt.Sprintf("Linker[%s, %s]", tools.TypeName[T](), tools.TypeName[I]()),
 		zeroValue: *new(I),
@@ -67,22 +60,8 @@ func NewLinker[T LinkKey, I any](links ...*Link[T, I]) *Linker[T, I] {
 	return enum
 }
 
-func (linker *Linker[T, I]) GetMapper() *Mapper[T] {
-	return linker.mapper
-}
-
 func (linker *Linker[T, I]) Add(key T, value I) {
-	linker.mapper.Add(key)
 	linker.values[key] = value
-}
-
-func (linker *Linker[T, I]) GetByName(keyName string) (I, error) {
-	key, err := linker.mapper.Get(keyName)
-	if err != nil {
-		return linker.zeroValue, err
-	}
-
-	return linker.Get(key)
 }
 
 func (linker *Linker[T, I]) Get(key T) (I, error) {
@@ -93,14 +72,13 @@ func (linker *Linker[T, I]) Get(key T) (I, error) {
 	return linker.zeroValue, fmt.Errorf("key %s %w for type %s", key, DoesNotExistError, linker.typeName)
 }
 
-func (linker *Linker[T, I]) HasByKey(key T) bool {
+func (linker *Linker[T, I]) Has(key T) bool {
 	_, exists := linker.values[key]
 	return exists
 }
 
 func (linker *Linker[T, I]) Remove(key T) {
 	delete(linker.values, key)
-	linker.mapper.RemoveByValue(key)
 }
 
 func (linker *Linker[T, I]) All() iter.Seq2[T, I] {

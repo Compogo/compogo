@@ -14,7 +14,8 @@ const (
 	ContainerNameFieldName = "container.name"
 	HostnameFieldName      = "hostname"
 
-	InitDurationFieldName = "compogo.duration.init"
+	InitDurationFieldName          = "compogo.duration.init"
+	ConfigurationDurationFieldName = "compogo.duration.configuration"
 
 	PreRunDurationFieldName  = "compogo.duration.run.pre"
 	RunDurationFieldName     = "compogo.duration.run.run"
@@ -33,7 +34,8 @@ const (
 	ContainerNameDefault = "unknown-container_name"
 	HostnameDefault      = "unknown-hostname"
 
-	InitDurationDefault = 100 * time.Millisecond
+	InitDurationDefault          = 100 * time.Millisecond
+	ConfigurationDurationDefault = 100 * time.Millisecond
 
 	PreRunDurationDefault  = 100 * time.Millisecond
 	RunDurationDefault     = 100 * time.Millisecond
@@ -59,7 +61,8 @@ type Config struct {
 	Hostname      string
 
 	// Duration
-	InitDuration time.Duration
+	InitDuration          time.Duration
+	ConfigurationDuration time.Duration
 
 	PreRunDuration  time.Duration
 	RunDuration     time.Duration
@@ -75,15 +78,16 @@ type Config struct {
 
 func NewConfig() *Config {
 	return &Config{
-		InitDuration:     InitDurationDefault,
-		PreRunDuration:   PreRunDurationDefault,
-		RunDuration:      RunDurationDefault,
-		PostRunDuration:  PostRunDurationDefault,
-		PreWaitDuration:  PreWaitDurationDefault,
-		PostWaitDuration: PostWaitDurationDefault,
-		PreStopDuration:  PreStopDurationDefault,
-		StopDuration:     StopDurationDefault,
-		PostStopDuration: PostStopDurationDefault,
+		InitDuration:          InitDurationDefault,
+		ConfigurationDuration: ConfigurationDurationDefault,
+		PreRunDuration:        PreRunDurationDefault,
+		RunDuration:           RunDurationDefault,
+		PostRunDuration:       PostRunDurationDefault,
+		PreWaitDuration:       PreWaitDurationDefault,
+		PostWaitDuration:      PostWaitDurationDefault,
+		PreStopDuration:       PreStopDurationDefault,
+		StopDuration:          StopDurationDefault,
+		PostStopDuration:      PostStopDurationDefault,
 	}
 }
 
@@ -118,6 +122,11 @@ func Configuration(config *Config, configurator configurator.Configurator) *Conf
 	if config.InitDuration == 0 || config.InitDuration == InitDurationDefault {
 		configurator.SetDefault(InitDurationFieldName, InitDurationDefault)
 		config.InitDuration = configurator.GetDuration(InitDurationFieldName)
+	}
+
+	if config.ConfigurationDuration == 0 || config.ConfigurationDuration == ConfigurationDurationDefault {
+		configurator.SetDefault(ConfigurationDurationFieldName, ConfigurationDurationDefault)
+		config.ConfigurationDuration = configurator.GetDuration(ConfigurationDurationFieldName)
 	}
 
 	if config.PreRunDuration == 0 || config.PreRunDuration == PreRunDurationDefault {

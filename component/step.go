@@ -4,10 +4,11 @@ package component
 
 const (
 	Init Step = iota
+	Configuration
 
-	PreRun
-	Run
-	PostRun
+	PreExecute
+	Execute
+	PostExecute
 
 	PreWait
 	Wait
