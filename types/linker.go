@@ -72,6 +72,14 @@ func (linker *Linker[T, I]) Get(key T) (I, error) {
 	return linker.zeroValue, fmt.Errorf("key %s %w for type %s", key, DoesNotExistError, linker.typeName)
 }
 
+func (linker *Linker[T, I]) GetOrDefault(key T, d I) I {
+	if val, exists := linker.values[key]; exists {
+		return val
+	}
+
+	return d
+}
+
 func (linker *Linker[T, I]) Has(key T) bool {
 	_, exists := linker.values[key]
 	return exists
