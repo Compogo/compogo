@@ -258,7 +258,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.InitDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.InitDuration)
 			fnc = cmp.Init
 
 			app.init.Add(cmp)
@@ -268,7 +268,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.ConfigurationDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.ConfigurationDuration)
 			fnc = cmp.Configuration
 
 			app.configuration.Add(cmp)
@@ -279,7 +279,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PreRunDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreRunDuration)
 			fnc = cmp.PreExecute
 
 			app.preRun.Add(cmp)
@@ -288,7 +288,17 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.RunDuration)
+			duration := app.config.RunDuration
+			if cmp.ExecuteDuration != nil {
+				duration = cmp.ExecuteDuration()
+			}
+
+			if duration > 0 {
+				ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), duration)
+			} else {
+				ctx, cancelFunc = context.WithCancel(app.closer.GetContext())
+			}
+
 			fnc = cmp.Execute
 
 			app.run.Add(cmp)
@@ -297,7 +307,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PostRunDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostRunDuration)
 			fnc = cmp.PostExecute
 
 			app.postRun.Add(cmp)
@@ -307,7 +317,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PreWaitDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreWaitDuration)
 			fnc = cmp.PreWait
 
 			app.preWait.Add(cmp)
@@ -316,7 +326,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PostWaitDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostWaitDuration)
 			fnc = cmp.PostWait
 
 			app.postWait.Add(cmp)
@@ -326,7 +336,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PreStopDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreStopDuration)
 			fnc = cmp.PreStop
 
 			app.preStop.Add(cmp)
@@ -335,7 +345,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.StopDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.StopDuration)
 			fnc = cmp.Stop
 
 			app.stop.Add(cmp)
@@ -344,7 +354,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PostStopDuration)
+			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostStopDuration)
 			fnc = cmp.PostStop
 
 			app.postStop.Add(cmp)

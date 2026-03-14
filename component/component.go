@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"time"
 
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
@@ -16,6 +17,8 @@ type WaitFunc func(ctx context.Context, container container.Container) error
 // BindFlags defines a function for registering command-line flags.
 // Called during the flag binding phase before any step execution.
 type BindFlags func(flagSet flag.FlagSet, container container.Container) error
+
+type GetDurationFunc func() time.Duration
 
 // Components is a collection of Component pointers for easier grouping.
 type Components []*Component
@@ -39,6 +42,8 @@ type Component struct {
 
 	// PreExecute executes before the main Execute step
 	PreExecute StepFunc
+
+	ExecuteDuration GetDurationFunc
 	// Execute contains the main component logic
 	Execute StepFunc
 	// PostExecute executes after the main Execute step
