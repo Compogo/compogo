@@ -336,7 +336,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreStopDuration)
+			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PreStopDuration)
 			fnc = cmp.PreStop
 
 			app.preStop.Add(cmp)
@@ -345,7 +345,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.StopDuration)
+			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.StopDuration)
 			fnc = cmp.Stop
 
 			app.stop.Add(cmp)
@@ -354,7 +354,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 				continue
 			}
 
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostStopDuration)
+			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PostStopDuration)
 			fnc = cmp.PostStop
 
 			app.postStop.Add(cmp)
