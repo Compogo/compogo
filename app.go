@@ -13,7 +13,7 @@ import (
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
 	"github.com/Compogo/compogo/logger"
-	"github.com/Compogo/compogo/types"
+	"github.com/Compogo/types/set"
 )
 
 // App represents the main application container.
@@ -36,26 +36,26 @@ type App struct {
 	loggerCmp *component.Component
 	logger    logger.Logger
 
-	components types.Set[*component.Component]
+	components set.Set[*component.Component]
 	wg         sync.WaitGroup
 
-	bindFlags types.Set[*component.Component]
+	bindFlags set.Set[*component.Component]
 
-	init          types.Set[*component.Component]
-	configuration types.Set[*component.Component]
+	init          set.Set[*component.Component]
+	configuration set.Set[*component.Component]
 
-	preRun  types.Set[*component.Component]
-	run     types.Set[*component.Component]
-	postRun types.Set[*component.Component]
+	preRun  set.Set[*component.Component]
+	run     set.Set[*component.Component]
+	postRun set.Set[*component.Component]
 
-	preWait   types.Set[*component.Component]
-	wait      types.Set[*component.Component]
+	preWait   set.Set[*component.Component]
+	wait      set.Set[*component.Component]
 	waitMutex sync.Mutex
-	postWait  types.Set[*component.Component]
+	postWait  set.Set[*component.Component]
 
-	preStop  types.Set[*component.Component]
-	stop     types.Set[*component.Component]
-	postStop types.Set[*component.Component]
+	preStop  set.Set[*component.Component]
+	stop     set.Set[*component.Component]
+	postStop set.Set[*component.Component]
 
 	isRunning atomic.Bool
 

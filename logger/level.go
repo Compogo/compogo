@@ -1,6 +1,6 @@
 package logger
 
-import "github.com/Compogo/compogo/types"
+import "github.com/Compogo/types/mapper"
 
 //go:generate stringer -type=Level
 
@@ -14,4 +14,4 @@ const (
 
 type Level uint8
 
-var Levels = types.NewMapper[Level](Panic, Error, Warn, Info, Debug)
+var Levels = mapper.NewMapper[Level](Panic, Error, Warn, Info, Debug)
