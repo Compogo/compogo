@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Compogo/compogo/closer"
 	"github.com/Compogo/compogo/component"
@@ -13,6 +14,7 @@ import (
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
 	"github.com/Compogo/compogo/logger"
+	"github.com/Compogo/types/linker"
 	"github.com/Compogo/types/set"
 )
 
@@ -38,24 +40,10 @@ type App struct {
 
 	components set.Set[*component.Component]
 	wg         sync.WaitGroup
+	waitMutex  sync.Mutex
 
-	bindFlags set.Set[*component.Component]
-
-	init          set.Set[*component.Component]
-	configuration set.Set[*component.Component]
-
-	preRun  set.Set[*component.Component]
-	run     set.Set[*component.Component]
-	postRun set.Set[*component.Component]
-
-	preWait   set.Set[*component.Component]
-	wait      set.Set[*component.Component]
-	waitMutex sync.Mutex
-	postWait  set.Set[*component.Component]
-
-	preStop  set.Set[*component.Component]
-	stop     set.Set[*component.Component]
-	postStop set.Set[*component.Component]
+	steps    *linker.Linker[component.Step, set.Set[*component.Component]]
+	timeouts *linker.Linker[component.Step, time.Duration]
 
 	isRunning atomic.Bool
 
@@ -65,7 +53,24 @@ type App struct {
 // NewApp creates a new application instance with the given name and options.
 // The config component is automatically added to ensure basic configuration is always present.
 func NewApp(name string, options ...Option) *App {
-	app := &App{name: name}
+	app := &App{
+		name: name,
+		steps: linker.NewLinker[component.Step, set.Set[*component.Component]](
+			linker.NewLink(component.Init, set.NewSet[*component.Component]()),
+			linker.NewLink(component.BindFlag, set.NewSet[*component.Component]()),
+			linker.NewLink(component.Configuration, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PreExecute, set.NewSet[*component.Component]()),
+			linker.NewLink(component.Execute, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PostExecute, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PreWait, set.NewSet[*component.Component]()),
+			linker.NewLink(component.Wait, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PostWait, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PreStop, set.NewSet[*component.Component]()),
+			linker.NewLink(component.Stop, set.NewSet[*component.Component]()),
+			linker.NewLink(component.PostStop, set.NewSet[*component.Component]()),
+		),
+		timeouts: linker.NewLinker[component.Step, time.Duration](),
+	}
 
 	options = append(options, withConfig(NewConfig()))
 
@@ -137,13 +142,15 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 	components := app.getCoreComponents()
 	components = append(components, app.components.ToSlice()...)
 
+	bindFlags, _ := app.steps.Get(component.BindFlag)
+
 	for _, cmp := range components {
-		if !app.bindFlags.Contains(cmp) && cmp.BindFlags != nil {
+		if !bindFlags.Contains(cmp) && cmp.BindFlags != nil {
 			if err = cmp.BindFlags(flagSet, app.container); err != nil {
 				return err
 			}
 
-			app.bindFlags.Add(cmp)
+			bindFlags.Add(cmp)
 		}
 	}
 
@@ -183,8 +190,13 @@ func (app *App) Serve() (err error) {
 	ctx, cancelFunc := context.WithCancel(app.closer.GetContext())
 	defer cancelFunc()
 
+	waitComponents, _ := app.steps.Get(component.Wait)
+
 	for _, cmp := range components {
-		app.serveComponent(ctx, cmp, chainErr)
+		if cmp.Wait != nil && !waitComponents.Contains(cmp) {
+			app.serveComponent(ctx, cmp, waitComponents, chainErr)
+			waitComponents.Add(cmp)
+		}
 	}
 
 	if err = app.runComponents(component.PostWait); err != nil {
@@ -193,10 +205,10 @@ func (app *App) Serve() (err error) {
 
 	select {
 	case waitErr := <-chainErr:
-		err = fmt.Errorf("%w\n[compogo][%s] %w", err, app.name, waitErr)
+		err = errors.Join(err, fmt.Errorf("[compogo][%s] %w", app.name, waitErr))
 
 		if closerErr := app.closer.Close(); closerErr != nil {
-			err = fmt.Errorf("%w\n[compogo][%s] %w", err, app.name, closerErr)
+			err = errors.Join(err, fmt.Errorf("[compogo][%s] %w", app.name, closerErr))
 		}
 	case <-ctx.Done():
 		break
@@ -240,6 +252,10 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 	var ctx context.Context
 	var cancelFunc context.CancelFunc
 	var fnc component.StepFunc
+	timeout := app.timeouts.GetOrDefault(step, time.Second)
+	stepComponents, _ := app.steps.Get(step)
+
+	cxtBackground := context.Background()
 
 	errChan := make(chan error, 1)
 	defer close(errChan)
@@ -251,120 +267,28 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 			}
 		}
 
-		switch step {
-		// init
-		case component.Init:
-			if app.init.Contains(cmp) {
-				continue
-			}
+		if stepComponents.Contains(cmp) {
+			continue
+		}
 
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.InitDuration)
-			fnc = cmp.Init
-
-			app.init.Add(cmp)
-
-		case component.Configuration:
-			if app.configuration.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.ConfigurationDuration)
-			fnc = cmp.Configuration
-
-			app.configuration.Add(cmp)
-
-		// run
-		case component.PreExecute:
-			if app.preRun.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreRunDuration)
-			fnc = cmp.PreExecute
-
-			app.preRun.Add(cmp)
-		case component.Execute:
-			if app.run.Contains(cmp) {
-				continue
-			}
-
-			duration := app.config.RunDuration
-			if cmp.ExecuteDuration != nil {
-				duration = cmp.ExecuteDuration()
-			}
-
-			if duration > 0 {
-				ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), duration)
-			} else {
-				ctx, cancelFunc = context.WithCancel(app.closer.GetContext())
-			}
-
-			fnc = cmp.Execute
-
-			app.run.Add(cmp)
-		case component.PostExecute:
-			if app.postRun.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostRunDuration)
-			fnc = cmp.PostExecute
-
-			app.postRun.Add(cmp)
-		// wait
-		case component.PreWait:
-			if app.preWait.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PreWaitDuration)
-			fnc = cmp.PreWait
-
-			app.preWait.Add(cmp)
-		case component.PostWait:
-			if app.postWait.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(app.closer.GetContext(), app.config.PostWaitDuration)
-			fnc = cmp.PostWait
-
-			app.postWait.Add(cmp)
-		// stop
-		case component.PreStop:
-			if app.preStop.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PreStopDuration)
-			fnc = cmp.PreStop
-
-			app.preStop.Add(cmp)
-		case component.Stop:
-			if app.stop.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.StopDuration)
-			fnc = cmp.Stop
-
-			app.stop.Add(cmp)
-		case component.PostStop:
-			if app.postStop.Contains(cmp) {
-				continue
-			}
-
-			ctx, cancelFunc = context.WithTimeout(context.Background(), app.config.PostStopDuration)
-			fnc = cmp.PostStop
-
-			app.postStop.Add(cmp)
-		default:
-			return fmt.Errorf("[compogo][%s][%s]: %w", app.name, step, StepUndefinedError)
+		fnc, err = cmp.GetStepFunc(step)
+		if err != nil {
+			return fmt.Errorf("[compogo][%s][%s]: %w", app.name, step, err)
 		}
 
 		if fnc == nil {
-			cancelFunc()
 			continue
+		}
+
+		cmpStepTimeout := timeout
+		if step == component.Execute && cmp.ExecuteDuration != nil {
+			cmpStepTimeout = cmp.ExecuteDuration()
+		}
+
+		if cmpStepTimeout > 0 {
+			ctx, cancelFunc = context.WithTimeout(cxtBackground, cmpStepTimeout)
+		} else {
+			ctx, cancelFunc = context.WithCancel(cxtBackground)
 		}
 
 		go func() {
@@ -384,27 +308,24 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return fmt.Errorf("[compogo][%s] component - '%s', step - '%s', failed: %w", app.name, cmp.Name, step, ComponentStepTimeoutError)
 		}
+
+		stepComponents.Add(cmp)
 	}
 
 	return nil
 }
 
-func (app *App) serveComponent(ctx context.Context, cmp *component.Component, chainErr chan error) {
+func (app *App) serveComponent(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component], chainErr chan error) {
 	app.waitMutex.Lock()
 	defer app.waitMutex.Unlock()
 
-	if cmp.Wait == nil || app.wait.Contains(cmp) {
-		return
-	}
-
 	app.wg.Add(1)
-	app.wait.Add(cmp)
-	go func(ctx context.Context, cmp *component.Component) {
+	go func(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component]) {
 		defer app.wg.Done()
 		defer func() {
 			app.waitMutex.Lock()
 			defer app.waitMutex.Unlock()
-			app.wait.Remove(cmp)
+			waitComponents.Remove(cmp)
 		}()
 
 		defer func() {
@@ -419,7 +340,7 @@ func (app *App) serveComponent(ctx context.Context, cmp *component.Component, ch
 		if err := cmp.Wait(ctx, app.container); err != nil {
 			chainErr <- fmt.Errorf("[compogo][%s] component '%s' wait failed: %w", app.name, cmp.Name, err)
 		}
-	}(ctx, cmp)
+	}(ctx, cmp, waitComponents)
 }
 
 func (app *App) getAllComponents() []*component.Component {

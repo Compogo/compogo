@@ -2,10 +2,16 @@ package component
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
+)
+
+var (
+	StepUndefinedError = errors.New("step is undefined")
 )
 
 // StepFunc defines a function that executes at a specific lifecycle step.
@@ -62,4 +68,31 @@ type Component struct {
 	Stop StepFunc
 	// PostStop executes after shutdown is complete
 	PostStop StepFunc
+}
+
+func (c *Component) GetStepFunc(step Step) (StepFunc, error) {
+	switch step {
+	case Init:
+		return c.Init, nil
+	case Configuration:
+		return c.Configuration, nil
+	case PreExecute:
+		return c.PreExecute, nil
+	case Execute:
+		return c.Execute, nil
+	case PostExecute:
+		return c.PostExecute, nil
+	case PreWait:
+		return c.PreWait, nil
+	case PostWait:
+		return c.PostWait, nil
+	case PreStop:
+		return c.PreStop, nil
+	case Stop:
+		return c.Stop, nil
+	case PostStop:
+		return c.PostStop, nil
+	}
+
+	return nil, fmt.Errorf("[component.%s] step '%s' %w", c.Name, step, StepUndefinedError)
 }

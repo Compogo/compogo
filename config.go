@@ -17,9 +17,9 @@ const (
 	InitDurationFieldName          = "compogo.duration.init"
 	ConfigurationDurationFieldName = "compogo.duration.configuration"
 
-	PreRunDurationFieldName  = "compogo.duration.run.pre"
-	RunDurationFieldName     = "compogo.duration.run.run"
-	PostRunDurationFieldName = "compogo.duration.run.post"
+	PreExecuteDurationFieldName  = "compogo.duration.execute.pre"
+	ExecuteDurationFieldName     = "compogo.duration.execute.run"
+	PostExecuteDurationFieldName = "compogo.duration.execute.post"
 
 	PreWaitDurationFieldName  = "compogo.duration.wait.pre"
 	PostWaitDurationFieldName = "compogo.duration.wait.post"
@@ -64,9 +64,9 @@ type Config struct {
 	InitDuration          time.Duration
 	ConfigurationDuration time.Duration
 
-	PreRunDuration  time.Duration
-	RunDuration     time.Duration
-	PostRunDuration time.Duration
+	ExecuteRunDuration  time.Duration
+	ExecuteDuration     time.Duration
+	PostExecuteDuration time.Duration
 
 	PreWaitDuration  time.Duration
 	PostWaitDuration time.Duration
@@ -80,9 +80,9 @@ func NewConfig() *Config {
 	return &Config{
 		InitDuration:          InitDurationDefault,
 		ConfigurationDuration: ConfigurationDurationDefault,
-		PreRunDuration:        PreRunDurationDefault,
-		RunDuration:           RunDurationDefault,
-		PostRunDuration:       PostRunDurationDefault,
+		ExecuteRunDuration:    PreRunDurationDefault,
+		ExecuteDuration:       RunDurationDefault,
+		PostExecuteDuration:   PostRunDurationDefault,
 		PreWaitDuration:       PreWaitDurationDefault,
 		PostWaitDuration:      PostWaitDurationDefault,
 		PreStopDuration:       PreStopDurationDefault,
@@ -129,19 +129,19 @@ func Configuration(config *Config, configurator configurator.Configurator) *Conf
 		config.ConfigurationDuration = configurator.GetDuration(ConfigurationDurationFieldName)
 	}
 
-	if config.PreRunDuration == 0 || config.PreRunDuration == PreRunDurationDefault {
-		configurator.SetDefault(PreRunDurationFieldName, PreRunDurationDefault)
-		config.PreRunDuration = configurator.GetDuration(PreRunDurationFieldName)
+	if config.ExecuteRunDuration == 0 || config.ExecuteRunDuration == PreRunDurationDefault {
+		configurator.SetDefault(PreExecuteDurationFieldName, PreRunDurationDefault)
+		config.ExecuteRunDuration = configurator.GetDuration(PreExecuteDurationFieldName)
 	}
 
-	if config.RunDuration == 0 || config.RunDuration == RunDurationDefault {
-		configurator.SetDefault(RunDurationFieldName, RunDurationDefault)
-		config.RunDuration = configurator.GetDuration(RunDurationFieldName)
+	if config.ExecuteDuration == 0 || config.ExecuteDuration == RunDurationDefault {
+		configurator.SetDefault(ExecuteDurationFieldName, RunDurationDefault)
+		config.ExecuteDuration = configurator.GetDuration(ExecuteDurationFieldName)
 	}
 
-	if config.PostRunDuration == 0 || config.PostRunDuration == PostRunDurationDefault {
-		configurator.SetDefault(PostRunDurationFieldName, PostRunDurationDefault)
-		config.PostRunDuration = configurator.GetDuration(PostRunDurationFieldName)
+	if config.PostExecuteDuration == 0 || config.PostExecuteDuration == PostRunDurationDefault {
+		configurator.SetDefault(PostExecuteDurationFieldName, PostRunDurationDefault)
+		config.PostExecuteDuration = configurator.GetDuration(PostExecuteDurationFieldName)
 	}
 
 	if config.PreWaitDuration == 0 || config.PreWaitDuration == PreWaitDurationDefault {

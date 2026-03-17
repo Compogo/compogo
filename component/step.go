@@ -4,6 +4,7 @@ package component
 
 const (
 	Init Step = iota
+	BindFlag
 	Configuration
 
 	PreExecute

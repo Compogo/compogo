@@ -19,6 +19,19 @@ func withConfig(config *Config) Option {
 	return func(app *App) {
 		app.config = config
 
+		// timeouts set default
+		app.timeouts.Add(component.Init, config.InitDuration)
+		app.timeouts.Add(component.BindFlag, config.InitDuration)
+		app.timeouts.Add(component.Configuration, config.ConfigurationDuration)
+		app.timeouts.Add(component.PreExecute, config.ExecuteRunDuration)
+		app.timeouts.Add(component.Execute, config.ExecuteDuration)
+		app.timeouts.Add(component.PostExecute, config.PostExecuteDuration)
+		app.timeouts.Add(component.PreWait, config.PreWaitDuration)
+		app.timeouts.Add(component.PostWait, config.PostWaitDuration)
+		app.timeouts.Add(component.PreStop, config.PreStopDuration)
+		app.timeouts.Add(component.Stop, config.StopDuration)
+		app.timeouts.Add(component.PostStop, config.PostStopDuration)
+
 		app.configCmp = &component.Component{
 			Name: "compogo.Config",
 			Init: component.StepFunc(func(container container.Container) error {
@@ -35,9 +48,9 @@ func withConfig(config *Config) Option {
 					flagSet.DurationVar(&config.InitDuration, InitDurationFieldName, InitDurationDefault, "maximum time to wait for a component's response at the init step")
 					flagSet.DurationVar(&config.ConfigurationDuration, ConfigurationDurationFieldName, ConfigurationDurationDefault, "maximum time to wait for a component's response at the configuration step")
 
-					flagSet.DurationVar(&config.PreRunDuration, PreRunDurationFieldName, PreRunDurationDefault, "maximum time to wait for a component's response at the pre-run step")
-					flagSet.DurationVar(&config.RunDuration, RunDurationFieldName, RunDurationDefault, "maximum time to wait for a component's response at the run step")
-					flagSet.DurationVar(&config.PostRunDuration, PostRunDurationFieldName, PostRunDurationDefault, "maximum time to wait for a component's response at the post-run step")
+					flagSet.DurationVar(&config.ExecuteRunDuration, PreExecuteDurationFieldName, PreRunDurationDefault, "maximum time to wait for a component's response at the pre-run step")
+					flagSet.DurationVar(&config.ExecuteDuration, ExecuteDurationFieldName, RunDurationDefault, "maximum time to wait for a component's response at the run step")
+					flagSet.DurationVar(&config.PostExecuteDuration, PostExecuteDurationFieldName, PostRunDurationDefault, "maximum time to wait for a component's response at the post-run step")
 
 					flagSet.DurationVar(&config.PreWaitDuration, PreWaitDurationFieldName, PreWaitDurationDefault, "maximum time to wait for a component's response at the pre-wait step")
 					flagSet.DurationVar(&config.PostWaitDuration, PostWaitDurationFieldName, PostWaitDurationDefault, "maximum time to wait for a component's response at the post-wait step")
@@ -47,6 +60,9 @@ func withConfig(config *Config) Option {
 					flagSet.DurationVar(&config.PostStopDuration, PostStopDurationFieldName, PostStopDurationDefault, "maximum time to wait for a component's response at the post-stop step")
 				})
 			}),
+			Configuration: component.StepFunc(func(container container.Container) error {
+				return container.Invoke(Configuration)
+			}),
 			PreExecute: component.StepFunc(func(container container.Container) error {
 				if err := container.Invoke(Configuration); err != nil {
 					return err
@@ -54,6 +70,19 @@ func withConfig(config *Config) Option {
 
 				return container.Invoke(func(config *Config) {
 					config.Name = app.name
+
+					// update timeouts
+					app.timeouts.Add(component.Init, config.InitDuration)
+					app.timeouts.Add(component.BindFlag, config.InitDuration)
+					app.timeouts.Add(component.Configuration, config.ConfigurationDuration)
+					app.timeouts.Add(component.PreExecute, config.ExecuteRunDuration)
+					app.timeouts.Add(component.Execute, config.ExecuteDuration)
+					app.timeouts.Add(component.PostExecute, config.PostExecuteDuration)
+					app.timeouts.Add(component.PreWait, config.PreWaitDuration)
+					app.timeouts.Add(component.PostWait, config.PostWaitDuration)
+					app.timeouts.Add(component.PreStop, config.PreStopDuration)
+					app.timeouts.Add(component.Stop, config.StopDuration)
+					app.timeouts.Add(component.PostStop, config.PostStopDuration)
 				})
 			}),
 		}
