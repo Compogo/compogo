@@ -21,10 +21,12 @@ type Configurator interface {
 	GetDuration(string) time.Duration
 	GetIntSlice(string) []int
 	GetStringSlice(string) []string
-	GetStringMap(string) map[string]interface{}
+	GetStringMap(string) map[string]any
 	GetStringMapString(string) map[string]string
 	GetStringMapStringSlice(string) map[string][]string
 	GetSizeInBytes(string) uint
-	SetDefault(string, interface{})
+	SetDefault(string, any)
 	ReadConfig() error
+
+	With(string) Configurator
 }
