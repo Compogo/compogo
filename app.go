@@ -39,7 +39,7 @@ type App struct {
 	loggerCmp *component.Component
 	logger    logger.Logger
 
-	components hashSlice.HashSlice[*component.Component]
+	components *hashSlice.HashSlice[*component.Component]
 	wg         sync.WaitGroup
 	waitMutex  sync.Mutex
 
@@ -54,6 +54,8 @@ type App struct {
 // NewApp creates a new application instance with the given name and options.
 // The config component is automatically added to ensure basic configuration is always present.
 func NewApp(name string, options ...Option) *App {
+	hs, _ := hashSlice.NewHashSlice[*component.Component]()
+
 	app := &App{
 		name: name,
 		steps: linker.NewLinker[component.Step, set.Set[*component.Component]](
@@ -70,7 +72,8 @@ func NewApp(name string, options ...Option) *App {
 			linker.NewLink(component.Stop, set.NewSet[*component.Component]()),
 			linker.NewLink(component.PostStop, set.NewSet[*component.Component]()),
 		),
-		timeouts: linker.NewLinker[component.Step, time.Duration](),
+		timeouts:   linker.NewLinker[component.Step, time.Duration](),
+		components: hs,
 	}
 
 	options = append(options, withConfig(NewConfig()))
