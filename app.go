@@ -14,6 +14,7 @@ import (
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
 	"github.com/Compogo/compogo/logger"
+	hashSlice "github.com/Compogo/types/hash_slice"
 	"github.com/Compogo/types/linker"
 	"github.com/Compogo/types/set"
 )
@@ -38,7 +39,7 @@ type App struct {
 	loggerCmp *component.Component
 	logger    logger.Logger
 
-	components set.Set[*component.Component]
+	components hashSlice.HashSlice[*component.Component]
 	wg         sync.WaitGroup
 	waitMutex  sync.Mutex
 
@@ -101,7 +102,7 @@ func (app *App) AddComponents(components ...*component.Component) (err error) {
 		}
 
 		if !app.existComponent(cmp) {
-			app.components.Add(cmp)
+			_, _ = app.components.Add(cmp)
 		}
 	}
 
