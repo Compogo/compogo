@@ -34,19 +34,19 @@ const (
 	ContainerNameDefault = "unknown-container_name"
 	HostnameDefault      = "unknown-hostname"
 
-	InitDurationDefault          = 100 * time.Millisecond
-	ConfigurationDurationDefault = 100 * time.Millisecond
+	InitDurationDefault          = 10 * time.Second
+	ConfigurationDurationDefault = 10 * time.Second
 
-	PreRunDurationDefault  = 100 * time.Millisecond
-	RunDurationDefault     = 100 * time.Millisecond
-	PostRunDurationDefault = 100 * time.Millisecond
+	PreRunDurationDefault  = 10 * time.Second
+	RunDurationDefault     = 10 * time.Second
+	PostRunDurationDefault = 10 * time.Second
 
-	PreWaitDurationDefault  = 100 * time.Millisecond
-	PostWaitDurationDefault = 100 * time.Millisecond
+	PreWaitDurationDefault  = 10 * time.Second
+	PostWaitDurationDefault = 10 * time.Second
 
-	PreStopDurationDefault  = 100 * time.Millisecond
-	StopDurationDefault     = 100 * time.Millisecond
-	PostStopDurationDefault = 100 * time.Millisecond
+	PreStopDurationDefault  = 10 * time.Second
+	StopDurationDefault     = 10 * time.Second
+	PostStopDurationDefault = 10 * time.Second
 )
 
 type Config struct {
