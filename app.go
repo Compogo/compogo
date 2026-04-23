@@ -22,7 +22,10 @@ import (
 // App represents the main application container.
 // It manages component lifecycle, dependencies, and graceful shutdown.
 type App struct {
-	name string
+	name      string
+	startTime time.Time
+
+	appComponent *component.Component
 
 	configCmp *component.Component
 	config    *Config
@@ -80,6 +83,14 @@ func NewApp(name string, options ...Option) *App {
 
 	for _, option := range options {
 		option(app)
+	}
+
+	app.appComponent = &component.Component{
+		Init: func(container container.Container) error {
+			return container.Provide(func() *App {
+				return app
+			})
+		},
 	}
 
 	return app
@@ -169,6 +180,8 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 // 5. Sequential execution of PreStop, Stop, PostStop
 // 6. Wait for all goroutines to finish
 func (app *App) Serve() (err error) {
+	app.startTime = time.Now().UTC()
+
 	if err = app.validate(); err != nil {
 		return err
 	}
@@ -416,6 +429,7 @@ func (app *App) validate() error {
 func (app *App) Clone(name string) *App {
 	return &App{
 		name:         fmt.Sprintf("%s.%s", app.name, name),
+		appComponent: app.appComponent,
 		config:       app.config,
 		container:    app.container,
 		configurator: app.configurator,
@@ -436,5 +450,10 @@ func (app *App) getCoreComponents() []*component.Component {
 		app.configCmp,
 		app.closerCmp,
 		app.loggerCmp,
+		app.appComponent,
 	}
+}
+
+func (app *App) StartTime() time.Time {
+	return app.startTime
 }
