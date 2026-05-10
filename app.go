@@ -2,7 +2,6 @@ package compogo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -46,8 +45,7 @@ type App struct {
 	wg         sync.WaitGroup
 	waitMutex  sync.Mutex
 
-	steps    *linker.Linker[component.Step, set.Set[*component.Component]]
-	timeouts *linker.Linker[component.Step, time.Duration]
+	steps *linker.Linker[component.Step, set.Set[*component.Component]]
 
 	isRunning atomic.Bool
 
@@ -75,7 +73,6 @@ func NewApp(name string, options ...Option) *App {
 			linker.NewLink(component.Stop, set.NewSet[*component.Component]()),
 			linker.NewLink(component.PostStop, set.NewSet[*component.Component]()),
 		),
-		timeouts:   linker.NewLinker[component.Step, time.Duration](),
 		components: hs,
 	}
 
@@ -100,10 +97,6 @@ func NewApp(name string, options ...Option) *App {
 // Components are initialized immediately and cannot be added while the app is running.
 // Returns an error if validation fails or the app is already running.
 func (app *App) AddComponents(components ...*component.Component) (err error) {
-	if err = app.validate(); err != nil {
-		return err
-	}
-
 	if app.IsRunning() {
 		return fmt.Errorf("[compogo][%s] %w", app.name, AppIsRunningError)
 	}
@@ -141,11 +134,11 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 	}
 
 	if app.IsRunning() {
-		return fmt.Errorf("[compogo][%s].BindFlags: %w", app.name, AppIsRunningError)
+		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, AppIsRunningError)
 	}
 
 	if err = app.runComponents(component.Init); err != nil {
-		return fmt.Errorf("[compogo][%s].BindFlags: %w", app.name, err)
+		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, err)
 	}
 
 	if app.parent != nil {
@@ -180,8 +173,6 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 // 5. Sequential execution of PreStop, Stop, PostStop
 // 6. Wait for all goroutines to finish
 func (app *App) Serve() (err error) {
-	app.startTime = time.Now().UTC()
-
 	if err = app.validate(); err != nil {
 		return err
 	}
@@ -190,10 +181,13 @@ func (app *App) Serve() (err error) {
 		return fmt.Errorf("[compogo][%s] %w", app.name, AppIsRunningError)
 	}
 
-	app.logger.Infof("[compogo][%s] Running", app.name)
-
 	app.setRunning(true)
 	defer app.setRunning(false)
+
+	app.startTime = time.Now().UTC()
+	l := app.logger.GetLogger("compogo").GetLogger(app.name)
+
+	l.Info("Running")
 
 	if err = app.runComponents(component.Init, component.Configuration, component.PreExecute, component.Execute, component.PostExecute, component.PreWait); err != nil {
 		return err
@@ -220,33 +214,28 @@ func (app *App) Serve() (err error) {
 		return err
 	}
 
-	select {
-	case waitErr := <-chainErr:
-		err = errors.Join(err, fmt.Errorf("[compogo][%s] %w", app.name, waitErr))
-
-		if closerErr := app.closer.Close(); closerErr != nil {
-			err = errors.Join(err, fmt.Errorf("[compogo][%s] %w", app.name, closerErr))
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				l.Info("Shutdown")
+				return
+			case err := <-chainErr:
+				l.Error(err.Error())
+			}
 		}
-	case <-ctx.Done():
-		break
-	}
+	}()
 
-	app.logger.Info("Shutdown")
+	app.wg.Wait()
 
 	if err = app.runComponents(component.PreStop, component.Stop, component.PostStop); err != nil {
 		return err
 	}
 
-	app.wg.Wait()
-
 	return err
 }
 
 func (app *App) runComponents(steps ...component.Step) (err error) {
-	if err = app.validate(); err != nil {
-		return err
-	}
-
 	if app.parent != nil {
 		if err = app.parent.runComponents(steps...); err != nil {
 			return err
@@ -303,28 +292,28 @@ func (app *App) serveComponent(ctx context.Context, cmp *component.Component, wa
 	app.waitMutex.Lock()
 	defer app.waitMutex.Unlock()
 
-	app.wg.Add(1)
-	go func(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component]) {
-		defer app.wg.Done()
-		defer func() {
-			app.waitMutex.Lock()
-			defer app.waitMutex.Unlock()
-			waitComponents.Remove(cmp)
-		}()
+	app.wg.Go(func(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component]) func() {
+		return func() {
+			defer func() {
+				app.waitMutex.Lock()
+				defer app.waitMutex.Unlock()
+				waitComponents.Remove(cmp)
+			}()
 
-		defer func() {
-			if r := recover(); r != nil {
-				chainErr <- fmt.Errorf("[compogo][%s] component '%s' wait failed: %s", app.name, cmp.Name, r)
+			defer func() {
+				if r := recover(); r != nil {
+					chainErr <- fmt.Errorf("component '%s' wait failed: %s", cmp.Name, r)
+				}
+			}()
+
+			ctx, cancelFunc := context.WithCancel(ctx)
+			defer cancelFunc()
+
+			if err := cmp.Wait(ctx, app.container); err != nil {
+				chainErr <- fmt.Errorf("component '%s' wait failed: %w", cmp.Name, err)
 			}
-		}()
-
-		ctx, cancelFunc := context.WithCancel(ctx)
-		defer cancelFunc()
-
-		if err := cmp.Wait(ctx, app.container); err != nil {
-			chainErr <- fmt.Errorf("[compogo][%s] component '%s' wait failed: %w", app.name, cmp.Name, err)
 		}
-	}(ctx, cmp, waitComponents)
+	}(ctx, cmp, waitComponents))
 }
 
 func (app *App) getAllComponents() []*component.Component {
@@ -362,9 +351,7 @@ func (app *App) validate() error {
 	var err error
 
 	if app.parent != nil {
-		if err = app.parent.validate(); err != nil {
-			return err
-		}
+		return app.parent.validate()
 	}
 
 	if app.container == nil {
@@ -394,6 +381,8 @@ func (app *App) validate() error {
 // (config, container, configurator, closer) but has its own logger and component set.
 // Useful for creating isolated sub-applications (e.g., for testing or modules).
 func (app *App) Clone(name string) *App {
+	hs, _ := hashSlice.NewHashSlice[*component.Component]()
+
 	return &App{
 		name:         fmt.Sprintf("%s.%s", app.name, name),
 		appComponent: app.appComponent,
@@ -401,8 +390,10 @@ func (app *App) Clone(name string) *App {
 		container:    app.container,
 		configurator: app.configurator,
 		closer:       app.closer,
-		logger:       app.logger.GetLogger(name),
+		logger:       app.logger.GetLogger("compogo").GetLogger(app.name).GetLogger(name),
 		parent:       app,
+		components:   hs,
+		steps:        app.steps,
 	}
 }
 
