@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
@@ -24,8 +23,6 @@ type WaitFunc func(ctx context.Context, container container.Container) error
 // Called during the flag binding phase before any step execution.
 type BindFlags func(flagSet flag.FlagSet, container container.Container) error
 
-type GetDurationFunc func() time.Duration
-
 // Components is a collection of Component pointers for easier grouping.
 type Components []*Component
 
@@ -41,15 +38,13 @@ type Component struct {
 	// Init performs initial setup and registers services in the container
 	Init StepFunc
 
-	Configuration StepFunc
-
 	// BindFlags registers component-specific command-line flags
 	BindFlags BindFlags
 
+	Configuration StepFunc
+
 	// PreExecute executes before the main Execute step
 	PreExecute StepFunc
-
-	ExecuteDuration GetDurationFunc
 	// Execute contains the main component logic
 	Execute StepFunc
 	// PostExecute executes after the main Execute step
@@ -92,7 +87,7 @@ func (c *Component) GetStepFunc(step Step) (StepFunc, error) {
 		return c.Stop, nil
 	case PostStop:
 		return c.PostStop, nil
+	default:
+		return nil, fmt.Errorf("[component.%s] step '%s' %w", c.Name, step, StepUndefinedError)
 	}
-
-	return nil, fmt.Errorf("[component.%s] step '%s' %w", c.Name, step, StepUndefinedError)
 }

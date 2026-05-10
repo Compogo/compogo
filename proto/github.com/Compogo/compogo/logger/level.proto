@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package compogo.logger;
+
+option go_package = "github.com/Compogo/compogo/protobuf/logger";
+
+enum Level {
+  Panic = 0;
+  Error = 1;
+  Warn = 2;
+  Info = 3;
+  Debug = 4;
+}

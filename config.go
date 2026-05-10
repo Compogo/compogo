@@ -2,7 +2,6 @@ package compogo
 
 import (
 	"os"
-	"time"
 
 	"github.com/Compogo/compogo/configurator"
 )
@@ -14,39 +13,11 @@ const (
 	ContainerNameFieldName = "container.name"
 	HostnameFieldName      = "hostname"
 
-	InitDurationFieldName          = "compogo.duration.init"
-	ConfigurationDurationFieldName = "compogo.duration.configuration"
-
-	PreExecuteDurationFieldName  = "compogo.duration.execute.pre"
-	ExecuteDurationFieldName     = "compogo.duration.execute.run"
-	PostExecuteDurationFieldName = "compogo.duration.execute.post"
-
-	PreWaitDurationFieldName  = "compogo.duration.wait.pre"
-	PostWaitDurationFieldName = "compogo.duration.wait.post"
-
-	PreStopDurationFieldName  = "compogo.duration.stop.pre"
-	StopDurationFieldName     = "compogo.duration.stop.stop"
-	PostStopDurationFieldName = "compogo.duration.stop.post"
-
 	ClusterDefault       = "unknown-cluster"
 	NamespaceDefault     = "unknown-namespace"
 	ContainerIdDefault   = "unknown-container_id"
 	ContainerNameDefault = "unknown-container_name"
 	HostnameDefault      = "unknown-hostname"
-
-	InitDurationDefault          = 10 * time.Second
-	ConfigurationDurationDefault = 10 * time.Second
-
-	PreRunDurationDefault  = 10 * time.Second
-	RunDurationDefault     = 10 * time.Second
-	PostRunDurationDefault = 10 * time.Second
-
-	PreWaitDurationDefault  = 10 * time.Second
-	PostWaitDurationDefault = 10 * time.Second
-
-	PreStopDurationDefault  = 10 * time.Second
-	StopDurationDefault     = 10 * time.Second
-	PostStopDurationDefault = 10 * time.Second
 )
 
 type Config struct {
@@ -59,36 +30,10 @@ type Config struct {
 	ContainerId   string
 	ContainerName string
 	Hostname      string
-
-	// Duration
-	InitDuration          time.Duration
-	ConfigurationDuration time.Duration
-
-	ExecuteRunDuration  time.Duration
-	ExecuteDuration     time.Duration
-	PostExecuteDuration time.Duration
-
-	PreWaitDuration  time.Duration
-	PostWaitDuration time.Duration
-
-	PreStopDuration  time.Duration
-	StopDuration     time.Duration
-	PostStopDuration time.Duration
 }
 
 func NewConfig() *Config {
-	return &Config{
-		InitDuration:          InitDurationDefault,
-		ConfigurationDuration: ConfigurationDurationDefault,
-		ExecuteRunDuration:    PreRunDurationDefault,
-		ExecuteDuration:       RunDurationDefault,
-		PostExecuteDuration:   PostRunDurationDefault,
-		PreWaitDuration:       PreWaitDurationDefault,
-		PostWaitDuration:      PostWaitDurationDefault,
-		PreStopDuration:       PreStopDurationDefault,
-		StopDuration:          StopDurationDefault,
-		PostStopDuration:      PostStopDurationDefault,
-	}
+	return &Config{}
 }
 
 func Configuration(config *Config, configurator configurator.Configurator) *Config {
@@ -117,56 +62,6 @@ func Configuration(config *Config, configurator configurator.Configurator) *Conf
 	if config.Hostname == "" || config.Hostname == HostnameDefault {
 		configurator.SetDefault(HostnameFieldName, HostnameDefault)
 		config.Hostname = configurator.GetString(HostnameFieldName)
-	}
-
-	if config.InitDuration == 0 || config.InitDuration == InitDurationDefault {
-		configurator.SetDefault(InitDurationFieldName, InitDurationDefault)
-		config.InitDuration = configurator.GetDuration(InitDurationFieldName)
-	}
-
-	if config.ConfigurationDuration == 0 || config.ConfigurationDuration == ConfigurationDurationDefault {
-		configurator.SetDefault(ConfigurationDurationFieldName, ConfigurationDurationDefault)
-		config.ConfigurationDuration = configurator.GetDuration(ConfigurationDurationFieldName)
-	}
-
-	if config.ExecuteRunDuration == 0 || config.ExecuteRunDuration == PreRunDurationDefault {
-		configurator.SetDefault(PreExecuteDurationFieldName, PreRunDurationDefault)
-		config.ExecuteRunDuration = configurator.GetDuration(PreExecuteDurationFieldName)
-	}
-
-	if config.ExecuteDuration == 0 || config.ExecuteDuration == RunDurationDefault {
-		configurator.SetDefault(ExecuteDurationFieldName, RunDurationDefault)
-		config.ExecuteDuration = configurator.GetDuration(ExecuteDurationFieldName)
-	}
-
-	if config.PostExecuteDuration == 0 || config.PostExecuteDuration == PostRunDurationDefault {
-		configurator.SetDefault(PostExecuteDurationFieldName, PostRunDurationDefault)
-		config.PostExecuteDuration = configurator.GetDuration(PostExecuteDurationFieldName)
-	}
-
-	if config.PreWaitDuration == 0 || config.PreWaitDuration == PreWaitDurationDefault {
-		configurator.SetDefault(PreWaitDurationFieldName, PreWaitDurationDefault)
-		config.PreWaitDuration = configurator.GetDuration(PreWaitDurationFieldName)
-	}
-
-	if config.PostWaitDuration == 0 || config.PostWaitDuration == PostWaitDurationDefault {
-		configurator.SetDefault(PostWaitDurationFieldName, PostWaitDurationDefault)
-		config.PostWaitDuration = configurator.GetDuration(PostWaitDurationFieldName)
-	}
-
-	if config.PreStopDuration == 0 || config.PreStopDuration == PreStopDurationDefault {
-		configurator.SetDefault(PreStopDurationFieldName, PreStopDurationDefault)
-		config.PreStopDuration = configurator.GetDuration(PreStopDurationFieldName)
-	}
-
-	if config.StopDuration == 0 || config.StopDuration == StopDurationDefault {
-		configurator.SetDefault(StopDurationFieldName, StopDurationDefault)
-		config.StopDuration = configurator.GetDuration(StopDurationFieldName)
-	}
-
-	if config.PostStopDuration == 0 || config.PostStopDuration == PostStopDurationDefault {
-		configurator.SetDefault(PostStopDurationFieldName, PostStopDurationDefault)
-		config.PostStopDuration = configurator.GetDuration(PostStopDurationFieldName)
 	}
 
 	return config
