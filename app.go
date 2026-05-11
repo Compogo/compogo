@@ -152,7 +152,17 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 
 	bindFlags, _ := app.steps.Get(component.BindFlag)
 
+	return app.bindFlags(flagSet, bindFlags, components...)
+}
+
+func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*component.Component], components ...*component.Component) (err error) {
 	for _, cmp := range components {
+		if len(cmp.Dependencies) > 0 {
+			if err = app.bindFlags(flagSet, bindFlags, cmp.Dependencies...); err != nil {
+				return err
+			}
+		}
+
 		if !bindFlags.Contains(cmp) && cmp.BindFlags != nil {
 			if err = cmp.BindFlags(flagSet, app.container); err != nil {
 				return err
