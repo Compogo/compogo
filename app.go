@@ -55,8 +55,6 @@ type App struct {
 // NewApp creates a new application instance with the given name and options.
 // The config component is automatically added to ensure basic configuration is always present.
 func NewApp(name string, options ...Option) *App {
-	hs, _ := hashSlice.NewHashSlice[*component.Component]()
-
 	app := &App{
 		name: name,
 		steps: linker.NewLinker[component.Step, set.Set[*component.Component]](
@@ -73,7 +71,7 @@ func NewApp(name string, options ...Option) *App {
 			linker.Link(component.Stop, set.NewSet[*component.Component]()),
 			linker.Link(component.PostStop, set.NewSet[*component.Component]()),
 		),
-		components: hs,
+		components: hashSlice.NewHashSlice[*component.Component](),
 	}
 
 	options = append(options, withConfig(NewConfig()))
@@ -391,8 +389,6 @@ func (app *App) validate() error {
 // (config, container, configurator, closer) but has its own logger and component set.
 // Useful for creating isolated sub-applications (e.g., for testing or modules).
 func (app *App) Clone(name string) *App {
-	hs, _ := hashSlice.NewHashSlice[*component.Component]()
-
 	return &App{
 		name:         fmt.Sprintf("%s.%s", app.name, name),
 		appComponent: app.appComponent,
@@ -402,7 +398,7 @@ func (app *App) Clone(name string) *App {
 		closer:       app.closer,
 		logger:       app.logger.GetLogger("compogo").GetLogger(app.name).GetLogger(name),
 		parent:       app,
-		components:   hs,
+		components:   hashSlice.NewHashSlice[*component.Component](),
 		steps:        app.steps,
 	}
 }

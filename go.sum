@@ -4,5 +4,7 @@ github.com/Compogo/types v0.0.13 h1:DwOCxmt0vBUJsKVmoUAu7spmyEMz3sZnE4WaktY/Tos=
 github.com/Compogo/types v0.0.13/go.mod h1:2wj58tE4RGlT4JsrN9s+M/kdJ4guUOma+jCXNB3WsB4=
 github.com/Compogo/types v0.0.14 h1:iMEzHOI5KdPAoQ596wOPSQYl25yP2tiecRMpLG6gK1s=
 github.com/Compogo/types v0.0.14/go.mod h1:2wj58tE4RGlT4JsrN9s+M/kdJ4guUOma+jCXNB3WsB4=
+github.com/Compogo/types v0.0.20 h1:3t+RkYmzMNajkLdQU2FoGjs1Lw+Ntz8APK2tzPQ079E=
+github.com/Compogo/types v0.0.20/go.mod h1:2wj58tE4RGlT4JsrN9s+M/kdJ4guUOma+jCXNB3WsB4=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
