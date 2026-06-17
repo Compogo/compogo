@@ -1,6 +1,7 @@
 # Compogo
 
-[https://pkg.go.dev/badge/github.com/Compogo/compogo.svg](https://pkg.go.dev/badge/github.com/Compogo/compogo.svg)[https://img.shields.io/badge/License-MIT-yellow.svg](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Compogo/compogo.svg)](https://pkg.go.dev/github.com/Compogo/compogo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Фреймворк для построения модульных Go-приложений с управлением жизненным циклом компонентов через DI-контейнер.
 
