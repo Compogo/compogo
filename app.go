@@ -3,75 +3,90 @@ package compogo
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/Compogo/compogo/closer"
-	"github.com/Compogo/compogo/component"
-	"github.com/Compogo/compogo/configurator"
-	"github.com/Compogo/compogo/container"
 	"github.com/Compogo/compogo/flag"
-	"github.com/Compogo/compogo/logger"
 	hashSlice "github.com/Compogo/types/hash_slice"
 	"github.com/Compogo/types/linker"
 	"github.com/Compogo/types/set"
 )
 
-// App represents the main application container.
-// It manages component lifecycle, dependencies, and graceful shutdown.
+// App — главный объект приложения Compogo.
+// Управляет жизненным циклом всех компонентов, обеспечивает:
+//   - Инициализацию и конфигурацию компонентов в правильном порядке (с учётом зависимостей)
+//   - Привязку флагов командной строки
+//   - Graceful shutdown через контекст и WaitGroup
+//   - Иерархию приложений (под-приложения через Clone)
+//
+// App потокобезопасен и может использоваться из нескольких горутин.
 type App struct {
 	name      string
 	startTime time.Time
 
-	appComponent *component.Component
+	appComponent *Component
 
-	configCmp *component.Component
+	configCmp *Component
 	config    *Config
 
-	containerCmp *component.Component
-	container    container.Container
+	containerCmp *Component
+	container    Container
 
-	configuratorCmp *component.Component
-	configurator    configurator.Configurator
+	configuratorCmp *Component
+	configurator    Configurator
 
-	closerCmp *component.Component
-	closer    closer.Closer
+	closerCmp *Component
+	closer    Closer
 
-	loggerCmp *component.Component
-	logger    logger.Logger
+	loggerCmp *Component
+	logger    Logger
 
-	components *hashSlice.HashSlice[*component.Component]
+	components *hashSlice.HashSlice[*Component]
 	wg         sync.WaitGroup
 	waitMutex  sync.Mutex
 
-	steps *linker.Linker[component.Step, set.Set[*component.Component]]
+	steps *linker.Linker[Step, set.Set[*Component]]
 
 	isRunning atomic.Bool
 
 	parent *App
 }
 
-// NewApp creates a new application instance with the given name and options.
-// The config component is automatically added to ensure basic configuration is always present.
+// NewApp создаёт новое приложение Compogo с указанным именем.
+// Имя используется в логах и сообщениях об ошибках.
+//
+// Опции могут быть переданы для конфигурации приложения:
+//   - WithConfigurator — установка загрузчика конфигурации
+//   - WithLogger — установка логгера
+//   - WithContainer — установка DI-контейнера
+//   - WithCloser — установка менеджера завершения
+//
+// Пример:
+//
+//	app := NewApp("myapp",
+//	    WithLogger(logrusLogger),
+//	    WithConfigurator(viperConfigurator),
+//	)
 func NewApp(name string, options ...Option) *App {
 	app := &App{
 		name: name,
-		steps: linker.NewLinker[component.Step, set.Set[*component.Component]](
-			linker.Link(component.Init, set.NewSet[*component.Component]()),
-			linker.Link(component.BindFlag, set.NewSet[*component.Component]()),
-			linker.Link(component.Configuration, set.NewSet[*component.Component]()),
-			linker.Link(component.PreExecute, set.NewSet[*component.Component]()),
-			linker.Link(component.Execute, set.NewSet[*component.Component]()),
-			linker.Link(component.PostExecute, set.NewSet[*component.Component]()),
-			linker.Link(component.PreWait, set.NewSet[*component.Component]()),
-			linker.Link(component.Wait, set.NewSet[*component.Component]()),
-			linker.Link(component.PostWait, set.NewSet[*component.Component]()),
-			linker.Link(component.PreStop, set.NewSet[*component.Component]()),
-			linker.Link(component.Stop, set.NewSet[*component.Component]()),
-			linker.Link(component.PostStop, set.NewSet[*component.Component]()),
+		steps: linker.NewLinker[Step, set.Set[*Component]](
+			linker.Link(Init, set.NewSet[*Component]()),
+			linker.Link(BindFlag, set.NewSet[*Component]()),
+			linker.Link(Configuration, set.NewSet[*Component]()),
+			linker.Link(PreExecute, set.NewSet[*Component]()),
+			linker.Link(Execute, set.NewSet[*Component]()),
+			linker.Link(PostExecute, set.NewSet[*Component]()),
+			linker.Link(PreWait, set.NewSet[*Component]()),
+			linker.Link(Wait, set.NewSet[*Component]()),
+			linker.Link(PostWait, set.NewSet[*Component]()),
+			linker.Link(PreStop, set.NewSet[*Component]()),
+			linker.Link(Stop, set.NewSet[*Component]()),
+			linker.Link(PostStop, set.NewSet[*Component]()),
 		),
-		components: hashSlice.NewHashSlice[*component.Component](),
+		components: hashSlice.NewHashSlice[*Component](),
 	}
 
 	options = append(options, withConfig(NewConfig()))
@@ -80,8 +95,8 @@ func NewApp(name string, options ...Option) *App {
 		option(app)
 	}
 
-	app.appComponent = &component.Component{
-		Init: func(container container.Container) error {
+	app.appComponent = &Component{
+		Init: func(container Container) error {
 			return container.Provide(func() *App {
 				return app
 			})
@@ -91,10 +106,21 @@ func NewApp(name string, options ...Option) *App {
 	return app
 }
 
-// AddComponents registers one or more components and their dependencies in the application.
-// Components are initialized immediately and cannot be added while the app is running.
-// Returns an error if validation fails or the app is already running.
-func (app *App) AddComponents(components ...*component.Component) (err error) {
+// AddComponents добавляет компоненты в приложение.
+// Компоненты добавляются рекурсивно вместе со всеми зависимостями.
+// Дубликаты автоматически исключаются.
+//
+// Важно: компоненты нельзя добавлять после запуска приложения (вызова Serve).
+// В этом случае возвращается ошибка AppIsRunningError.
+//
+// Пример:
+//
+//	app := NewApp("myapp")
+//	err := app.AddComponents(
+//	    &component.Component{Name: "db", Init: initDB},
+//	    &component.Component{Name: "api", Dependencies: component.Components{dbComponent}},
+//	)
+func (app *App) AddComponents(components ...*Component) (err error) {
 	if app.IsRunning() {
 		return fmt.Errorf("[compogo][%s] %w", app.name, AppIsRunningError)
 	}
@@ -114,7 +140,8 @@ func (app *App) AddComponents(components ...*component.Component) (err error) {
 	return nil
 }
 
-func (app *App) existComponent(component *component.Component) bool {
+// existComponent проверяет существование компонента в приложении или его родителе.
+func (app *App) existComponent(component *Component) bool {
 	if app.parent != nil {
 		if exist := app.parent.existComponent(component); exist {
 			return true
@@ -124,8 +151,22 @@ func (app *App) existComponent(component *component.Component) bool {
 	return app.components.Contains(component)
 }
 
-// BindFlags binds command-line flags for all registered components.
-// Must be called before Serve() and cannot be called while the app is running.
+// BindFlags выполняет привязку флагов командной строки для всех компонентов.
+// Метод рекурсивно обходит все компоненты и зависимости, вызывая их BindFlags-функции.
+//
+// Порядок выполнения:
+//   - Сначала выполняются Init-функции компонентов (для регистрации в DI-контейнере)
+//   - Затем в компонентах с учётом зависимостей выполняются BindFlags
+//
+// Каждый компонент выполняется только один раз (отслеживается через steps).
+//
+// Пример:
+//
+//	flagSet := pflag.NewFlagSet("myapp", pflag.ExitOnError)
+//	if err := app.BindFlags(flagSet); err != nil {
+//	    log.Fatal(err)
+//	}
+//	flagSet.Parse(os.Args[1:])
 func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 	if err = app.validate(); err != nil {
 		return err
@@ -135,7 +176,7 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, AppIsRunningError)
 	}
 
-	if err = app.runComponents(component.Init); err != nil {
+	if err = app.runComponents(Init); err != nil {
 		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, err)
 	}
 
@@ -146,14 +187,15 @@ func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
 	}
 
 	components := app.getCoreComponents()
-	components = append(components, app.components.ToSlice()...)
+	components = append(components, app.components.Items()...)
 
-	bindFlags, _ := app.steps.Get(component.BindFlag)
+	bindFlags, _ := app.steps.Get(BindFlag)
 
 	return app.bindFlags(flagSet, bindFlags, components...)
 }
 
-func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*component.Component], components ...*component.Component) (err error) {
+// bindFlags — внутренняя рекурсивная реализация привязки флагов.
+func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*Component], components ...*Component) (err error) {
 	for _, cmp := range components {
 		if len(cmp.Dependencies) > 0 {
 			if err = app.bindFlags(flagSet, bindFlags, cmp.Dependencies...); err != nil {
@@ -173,13 +215,19 @@ func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*component.Com
 	return nil
 }
 
-// Serve starts the application and runs all components through their lifecycle:
-// 1. Sequential execution of PreExecute, Execute, PostExecute, PreWait
-// 2. Concurrent execution of all Wait components
-// 3. Sequential execution of PostWait
-// 4. Wait for shutdown signal or first error
-// 5. Sequential execution of PreStop, Stop, PostStop
-// 6. Wait for all goroutines to finish
+// Serve запускает приложение и все его компоненты.
+// Это основной метод, который блокирует выполнение до завершения всех компонентов.
+//
+// Порядок выполнения этапов:
+//   - Init (инициализация компонентов)
+//   - Configuration (загрузка конфигурации)
+//   - PreExecute → Execute → PostExecute (код однопоточного выполнения)
+//   - PreWait → Wait → PostWait (код для выполнения в Go рутинах)
+//   - PreStop → Stop → PostStop (остановка компонентов)
+//
+// Wait-функции компонентов выполняются конкурентно в отдельных горутинах.
+// При получении сигнала завершения (через Closer) или ошибке в любом Wait-компоненте,
+// инициируется graceful shutdown.
 func (app *App) Serve() (err error) {
 	if err = app.validate(); err != nil {
 		return err
@@ -197,7 +245,7 @@ func (app *App) Serve() (err error) {
 
 	l.Info("Running")
 
-	if err = app.runComponents(component.Init, component.Configuration, component.PreExecute, component.Execute, component.PostExecute, component.PreWait); err != nil {
+	if err = app.runComponents(Init, Configuration, PreExecute, Execute, PostExecute, PreWait); err != nil {
 		return err
 	}
 
@@ -209,7 +257,7 @@ func (app *App) Serve() (err error) {
 	ctx, cancelFunc := context.WithCancel(app.closer.GetContext())
 	defer cancelFunc()
 
-	waitComponents, _ := app.steps.Get(component.Wait)
+	waitComponents, _ := app.steps.Get(Wait)
 
 	for _, cmp := range components {
 		if cmp.Wait != nil && !waitComponents.Contains(cmp) {
@@ -218,7 +266,7 @@ func (app *App) Serve() (err error) {
 		}
 	}
 
-	if err = app.runComponents(component.PostWait); err != nil {
+	if err = app.runComponents(PostWait); err != nil {
 		return err
 	}
 
@@ -230,20 +278,24 @@ func (app *App) Serve() (err error) {
 				return
 			case err := <-chainErr:
 				l.Error(err.Error())
+				if err := app.closer.Close(); err != nil {
+					l.Error(err.Error())
+				}
 			}
 		}
 	}()
 
 	app.wg.Wait()
 
-	if err = app.runComponents(component.PreStop, component.Stop, component.PostStop); err != nil {
+	if err = app.runComponents(PreStop, Stop, PostStop); err != nil {
 		return err
 	}
 
 	return err
 }
 
-func (app *App) runComponents(steps ...component.Step) (err error) {
+// runComponents выполняет указанные этапы для всех компонентов приложения.
+func (app *App) runComponents(steps ...Step) (err error) {
 	if app.parent != nil {
 		if err = app.parent.runComponents(steps...); err != nil {
 			return err
@@ -251,7 +303,7 @@ func (app *App) runComponents(steps ...component.Step) (err error) {
 	}
 
 	components := app.getCoreComponents()
-	components = append(components, app.components.ToSlice()...)
+	components = append(components, app.components.Items()...)
 
 	for _, step := range steps {
 		if err = app.runStepComponents(step, components...); err != nil {
@@ -262,9 +314,14 @@ func (app *App) runComponents(steps ...component.Step) (err error) {
 	return nil
 }
 
-func (app *App) runStepComponents(step component.Step, components ...*component.Component) (err error) {
-	var fnc component.StepFunc
+// runStepComponents выполняет один этап для списка компонентов с учётом зависимостей.
+func (app *App) runStepComponents(step Step, components ...*Component) (err error) {
+	var fnc StepFunc
 	stepComponents, _ := app.steps.Get(step)
+
+	if stopSteps.Contains(step) {
+		slices.Reverse(components)
+	}
 
 	for _, cmp := range components {
 		if len(cmp.Dependencies) > 0 {
@@ -277,7 +334,7 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 			continue
 		}
 
-		fnc, err = cmp.GetStepFunc(step)
+		fnc, err = cmp.stepFunc(step)
 		if err != nil {
 			return fmt.Errorf("[compogo][%s][%s]: %w", app.name, step, err)
 		}
@@ -296,11 +353,14 @@ func (app *App) runStepComponents(step component.Step, components ...*component.
 	return nil
 }
 
-func (app *App) serveComponent(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component], chainErr chan error) {
+// serveComponent запускает Wait-функцию компонента в отдельной горутине.
+// Использует sync.WaitGroup для отслеживания завершения всех Wait-функций.
+// При панике или ошибке отправляет сообщение в канал chainErr.
+func (app *App) serveComponent(ctx context.Context, cmp *Component, waitComponents set.Set[*Component], chainErr chan error) {
 	app.waitMutex.Lock()
 	defer app.waitMutex.Unlock()
 
-	app.wg.Go(func(ctx context.Context, cmp *component.Component, waitComponents set.Set[*component.Component]) func() {
+	app.wg.Go(func(ctx context.Context, cmp *Component, waitComponents set.Set[*Component]) func() {
 		return func() {
 			defer func() {
 				app.waitMutex.Lock()
@@ -324,18 +384,21 @@ func (app *App) serveComponent(ctx context.Context, cmp *component.Component, wa
 	}(ctx, cmp, waitComponents))
 }
 
-func (app *App) getAllComponents() []*component.Component {
+// getAllComponents возвращает все компоненты приложения, включая системные,
+// пользовательские и компоненты родительского приложения.
+func (app *App) getAllComponents() []*Component {
 	components := app.getCoreComponents()
 
 	if app.parent != nil {
 		components = append(components, app.parent.getAllComponents()...)
 	}
 
-	components = append(components, app.components.ToSlice()...)
+	components = append(components, app.components.Items()...)
 
 	return components
 }
 
+// setRunning устанавливает флаг running для приложения и всех его родителей.
 func (app *App) setRunning(isRunning bool) {
 	if app.parent != nil {
 		app.parent.setRunning(isRunning)
@@ -344,7 +407,7 @@ func (app *App) setRunning(isRunning bool) {
 	app.isRunning.Store(isRunning)
 }
 
-// IsRunning returns true if the application is in the running state.
+// IsRunning возвращает true, если приложение или его родитель запущены.
 func (app *App) IsRunning() bool {
 	if app.parent != nil {
 		if isRunning := app.parent.IsRunning(); isRunning {
@@ -355,6 +418,8 @@ func (app *App) IsRunning() bool {
 	return app.isRunning.Load()
 }
 
+// validate проверяет, что все необходимые зависимости приложения инициализированы.
+// Возвращает агрегированную ошибку, если чего-то не хватает.
 func (app *App) validate() error {
 	var err error
 
@@ -385,9 +450,15 @@ func (app *App) validate() error {
 	return err
 }
 
-// Clone creates a child application that inherits all core services
-// (config, container, configurator, closer) but has its own logger and component set.
-// Useful for creating isolated sub-applications (e.g., for testing or modules).
+// Clone создаёт дочернее приложение с указанным именем.
+// Дочернее приложение наследует от родителя:
+//   - DI-контейнер
+//   - Конфигуратор
+//   - Closer (менеджер завершения)
+//   - Логгер (с вложенным именем)
+//
+// Используется для создания модульных приложений, где каждый модуль
+// может иметь свои компоненты, но разделяет общие сервисы.
 func (app *App) Clone(name string) *App {
 	return &App{
 		name:         fmt.Sprintf("%s.%s", app.name, name),
@@ -398,17 +469,19 @@ func (app *App) Clone(name string) *App {
 		closer:       app.closer,
 		logger:       app.logger.GetLogger("compogo").GetLogger(app.name).GetLogger(name),
 		parent:       app,
-		components:   hashSlice.NewHashSlice[*component.Component](),
+		components:   hashSlice.NewHashSlice[*Component](),
 		steps:        app.steps,
 	}
 }
 
-func (app *App) getCoreComponents() []*component.Component {
+// getCoreComponents возвращает системные компоненты приложения.
+// Эти компоненты всегда выполняются первыми.
+func (app *App) getCoreComponents() []*Component {
 	if app.configCmp == nil {
 		return nil
 	}
 
-	return []*component.Component{
+	return []*Component{
 		app.configuratorCmp,
 		app.containerCmp,
 		app.configCmp,
@@ -418,6 +491,8 @@ func (app *App) getCoreComponents() []*component.Component {
 	}
 }
 
+// StartTime возвращает время запуска приложения.
+// Полезно для метрик и мониторинга uptime.
 func (app *App) StartTime() time.Time {
 	return app.startTime
 }

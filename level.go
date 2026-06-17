@@ -1,4 +1,4 @@
-package logger
+package compogo
 
 import (
 	"github.com/Compogo/types/mapper"
