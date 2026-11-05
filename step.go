@@ -2,7 +2,7 @@ package compogo
 
 import "github.com/Compogo/types/set"
 
-//go:generate stringer -type=Step
+//go:generate stringer -type=Step -linecomment
 
 // Step определяет этапы жизненного цикла компонента.
 // Каждый компонент может реализовать функции для любого из этих этапов.
@@ -27,47 +27,47 @@ import "github.com/Compogo/types/set"
 const (
 	// Init — начальный этап инициализации компонента.
 	// На этом этапе компонент регистрирует свои зависимости и сервисы в DI-контейнере.
-	Init Step = iota
+	Init Step = iota // init
 
 	// BindFlag — этап привязки флагов командной строки.
 	// Компонент определяет свои флаги и связывает их с полями конфигурации.
-	BindFlag
+	BindFlag // bindFlag
 
 	// Configuration — этап загрузки конфигурации.
 	// Компонент читает и валидирует свою конфигурацию.
-	Configuration
+	Configuration // configuration
 
 	// PreExecute — подготовка к выполнению.
 	// Выполняется перед основным рабочим циклом компонента.
-	PreExecute
+	PreExecute // preExecute
 
 	// Execute — основной рабочий цикл компонента.
 	// Обычно содержит блокирующую логику (например, запуск HTTP-сервера).
-	Execute
+	Execute // execute
 
 	// PostExecute — завершение рабочего цикла.
 	// Выполняется после завершения Execute.
-	PostExecute
+	PostExecute // postExecute
 
 	// PreWait — подготовка к ожиданию сигналов.
-	PreWait
+	PreWait // preWait
 
 	// Wait — ожидание сигналов завершения (например, SIGINT, SIGTERM).
 	// Компонент может ожидать свой сигнал или использовать общий контекст приложения.
-	Wait
+	Wait // wait
 
 	// PostWait — завершение ожидания.
-	PostWait
+	PostWait // postWait
 
 	// PreStop — подготовка к остановке.
-	PreStop
+	PreStop // preStop
 
 	// Stop — остановка компонента.
 	// Здесь компонент должен корректно завершить все рабочие горутины.
-	Stop
+	Stop // stop
 
 	// PostStop — завершение остановки, финальная очистка.
-	PostStop
+	PostStop // postStop
 )
 
 // Step представляет этап жизненного цикла компонента.

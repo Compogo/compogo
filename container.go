@@ -23,7 +23,7 @@ package compogo
 //	    srv.ListenAndServe()
 //	})
 type Container interface {
-	Provide(interface{}) error
-	Provides(...interface{}) error
-	Invoke(interface{}) error
+	Provide(any) error
+	Provides(...any) error
+	Invoke(any) error
 }

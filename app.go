@@ -1,35 +1,21 @@
 package compogo
 
 import (
-	"context"
 	"fmt"
+	"os"
 	"slices"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/Compogo/compogo/flag"
 	hashSlice "github.com/Compogo/types/hash_slice"
 	"github.com/Compogo/types/linker"
 	"github.com/Compogo/types/set"
+	"golang.org/x/sync/errgroup"
 )
 
-// App — главный объект приложения Compogo.
-// Управляет жизненным циклом всех компонентов, обеспечивает:
-//   - Инициализацию и конфигурацию компонентов в правильном порядке (с учётом зависимостей)
-//   - Привязку флагов командной строки
-//   - Graceful shutdown через контекст и WaitGroup
-//   - Иерархию приложений (под-приложения через Clone)
-//
-// App потокобезопасен и может использоваться из нескольких горутин.
 type App struct {
-	name      string
-	startTime time.Time
-
-	appComponent *Component
-
-	configCmp *Component
-	config    *Config
+	name   string
+	config *Config
 
 	containerCmp *Component
 	container    Container
@@ -43,35 +29,25 @@ type App struct {
 	loggerCmp *Component
 	logger    Logger
 
-	components *hashSlice.HashSlice[*Component]
-	wg         sync.WaitGroup
-	waitMutex  sync.Mutex
+	flagCmp *Component
 
-	steps *linker.Linker[Step, set.Set[*Component]]
+	components *hashSlice.HashSlice[*Component]
+	steps      *linker.Linker[Step, set.Set[*Component]]
+	wgErr      errgroup.Group
+
+	parent   *App
+	children []*App
 
 	isRunning atomic.Bool
-
-	parent *App
 }
 
-// NewApp создаёт новое приложение Compogo с указанным именем.
-// Имя используется в логах и сообщениях об ошибках.
-//
-// Опции могут быть переданы для конфигурации приложения:
-//   - WithConfigurator — установка загрузчика конфигурации
-//   - WithLogger — установка логгера
-//   - WithContainer — установка DI-контейнера
-//   - WithCloser — установка менеджера завершения
-//
-// Пример:
-//
-//	app := NewApp("myapp",
-//	    WithLogger(logrusLogger),
-//	    WithConfigurator(viperConfigurator),
-//	)
-func NewApp(name string, options ...Option) *App {
+func NewApp(name string, options ...Option) (*App, error) {
 	app := &App{
 		name: name,
+		config: &Config{
+			Name: name,
+			PID:  uint64(os.Getpid()),
+		},
 		steps: linker.NewLinker[Step, set.Set[*Component]](
 			linker.Link(Init, set.NewSet[*Component]()),
 			linker.Link(BindFlag, set.NewSet[*Component]()),
@@ -87,42 +63,41 @@ func NewApp(name string, options ...Option) *App {
 			linker.Link(PostStop, set.NewSet[*Component]()),
 		),
 		components: hashSlice.NewHashSlice[*Component](),
+		flagCmp:    &flagComponent,
 	}
-
-	options = append(options, withConfig(NewConfig()))
 
 	for _, option := range options {
 		option(app)
 	}
 
-	app.appComponent = &Component{
-		Init: func(container Container) error {
-			return container.Provide(func() *App {
-				return app
-			})
-		},
+	if app.container == nil {
+		return nil, ContainerUndefinedErr
 	}
 
-	return app
+	if app.configurator == nil {
+		return nil, ConfiguratorUndefinedErr
+	}
+
+	if app.closer == nil {
+		return nil, CloserUndefinedErr
+	}
+
+	if app.logger == nil {
+		return nil, LoggerUndefinedErr
+	}
+
+	if err := app.container.Provide(func() *Config { return app.config }); err != nil {
+		return nil, err
+	}
+
+	app.logger = app.logger.GetLogger("Compogo").GetLogger(app.name)
+
+	return app, nil
 }
 
-// AddComponents добавляет компоненты в приложение.
-// Компоненты добавляются рекурсивно вместе со всеми зависимостями.
-// Дубликаты автоматически исключаются.
-//
-// Важно: компоненты нельзя добавлять после запуска приложения (вызова Serve).
-// В этом случае возвращается ошибка AppIsRunningError.
-//
-// Пример:
-//
-//	app := NewApp("myapp")
-//	err := app.AddComponents(
-//	    &component.Component{Name: "db", Init: initDB},
-//	    &component.Component{Name: "api", Dependencies: component.Components{dbComponent}},
-//	)
 func (app *App) AddComponents(components ...*Component) (err error) {
 	if app.IsRunning() {
-		return fmt.Errorf("[compogo][%s] %w", app.name, AppIsRunningError)
+		return fmt.Errorf("[compogo][%s] AddComponents: %w", app.name, AppIsRunningErr)
 	}
 
 	for _, cmp := range components {
@@ -140,7 +115,6 @@ func (app *App) AddComponents(components ...*Component) (err error) {
 	return nil
 }
 
-// existComponent проверяет существование компонента в приложении или его родителе.
 func (app *App) existComponent(component *Component) bool {
 	if app.parent != nil {
 		if exist := app.parent.existComponent(component); exist {
@@ -167,52 +141,12 @@ func (app *App) existComponent(component *Component) bool {
 //	    log.Fatal(err)
 //	}
 //	flagSet.Parse(os.Args[1:])
-func (app *App) BindFlags(flagSet flag.FlagSet) (err error) {
-	if err = app.validate(); err != nil {
-		return err
-	}
-
+func (app *App) BindFlags() error {
 	if app.IsRunning() {
-		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, AppIsRunningError)
+		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, AppIsRunningErr)
 	}
 
-	if err = app.runComponents(Init); err != nil {
-		return fmt.Errorf("[compogo][%s] BindFlags: %w", app.name, err)
-	}
-
-	if app.parent != nil {
-		if err = app.parent.BindFlags(flagSet); err != nil {
-			return err
-		}
-	}
-
-	components := app.getCoreComponents()
-	components = append(components, app.components.Items()...)
-
-	bindFlags, _ := app.steps.Get(BindFlag)
-
-	return app.bindFlags(flagSet, bindFlags, components...)
-}
-
-// bindFlags — внутренняя рекурсивная реализация привязки флагов.
-func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*Component], components ...*Component) (err error) {
-	for _, cmp := range components {
-		if len(cmp.Dependencies) > 0 {
-			if err = app.bindFlags(flagSet, bindFlags, cmp.Dependencies...); err != nil {
-				return err
-			}
-		}
-
-		if !bindFlags.Contains(cmp) && cmp.BindFlags != nil {
-			if err = cmp.BindFlags(flagSet, app.container); err != nil {
-				return err
-			}
-
-			bindFlags.Add(cmp)
-		}
-	}
-
-	return nil
+	return app.runSteps(Init, BindFlag)
 }
 
 // Serve запускает приложение и все его компоненты.
@@ -226,85 +160,42 @@ func (app *App) bindFlags(flagSet flag.FlagSet, bindFlags set.Set[*Component], c
 //   - PreStop → Stop → PostStop (остановка компонентов)
 //
 // Wait-функции компонентов выполняются конкурентно в отдельных горутинах.
-// При получении сигнала завершения (через Closer) или ошибке в любом Wait-компоненте,
-// инициируется graceful shutdown.
+// При ошибке в любом Wait-компоненте, возвращается первая ошибка, без graceful shutdown и выполнения последующих шагов.
 func (app *App) Serve() (err error) {
-	if err = app.validate(); err != nil {
-		return err
-	}
-
 	if app.IsRunning() {
-		return fmt.Errorf("[compogo][%s] %w", app.name, AppIsRunningError)
+		return fmt.Errorf("[compogo][%s] Server: %w", app.name, AppIsRunningErr)
 	}
 
 	app.setRunning(true)
 	defer app.setRunning(false)
 
-	app.startTime = time.Now().UTC()
-	l := app.logger.GetLogger("compogo").GetLogger(app.name)
+	app.config.StartTime = time.Now().UTC()
+	defer app.closer.Close()
 
-	l.Info("Running")
+	app.logger.Info("Running")
 
-	if err = app.runComponents(Init, Configuration, PreExecute, Execute, PostExecute, PreWait); err != nil {
+	if err = app.runSteps(Init, Configuration, PreExecute, Execute, PostExecute, PreWait, Wait, PostWait); err != nil {
 		return err
 	}
 
-	components := app.getAllComponents()
-
-	chainErr := make(chan error, 1)
-	defer close(chainErr)
-
-	ctx, cancelFunc := context.WithCancel(app.closer.GetContext())
-	defer cancelFunc()
-
-	waitComponents, _ := app.steps.Get(Wait)
-
-	for _, cmp := range components {
-		if cmp.Wait != nil && !waitComponents.Contains(cmp) {
-			app.serveComponent(ctx, cmp, waitComponents, chainErr)
-			waitComponents.Add(cmp)
-		}
-	}
-
-	if err = app.runComponents(PostWait); err != nil {
+	if err = app.wgErr.Wait(); err != nil {
 		return err
 	}
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				l.Info("Shutdown")
-				return
-			case err := <-chainErr:
-				l.Error(err.Error())
-				if err := app.closer.Close(); err != nil {
-					l.Error(err.Error())
-				}
-			}
-		}
-	}()
+	app.logger.Info("Shutdown")
 
-	app.wg.Wait()
-
-	if err = app.runComponents(PreStop, Stop, PostStop); err != nil {
-		return err
-	}
-
-	return err
+	return app.runSteps(PreStop, Stop, PostStop)
 }
 
-// runComponents выполняет указанные этапы для всех компонентов приложения.
-func (app *App) runComponents(steps ...Step) (err error) {
+// runSteps выполняет указанные этапы для всех компонентов приложения.
+func (app *App) runSteps(steps ...Step) (err error) {
 	if app.parent != nil {
-		if err = app.parent.runComponents(steps...); err != nil {
+		if err = app.parent.runSteps(steps...); err != nil {
 			return err
 		}
 	}
 
-	components := app.getCoreComponents()
-	components = append(components, app.components.Items()...)
-
+	components := app.getAllComponents()
 	for _, step := range steps {
 		if err = app.runStepComponents(step, components...); err != nil {
 			return err
@@ -316,10 +207,10 @@ func (app *App) runComponents(steps ...Step) (err error) {
 
 // runStepComponents выполняет один этап для списка компонентов с учётом зависимостей.
 func (app *App) runStepComponents(step Step, components ...*Component) (err error) {
-	var fnc StepFunc
 	stepComponents, _ := app.steps.Get(step)
 
 	if stopSteps.Contains(step) {
+		components = slices.Clone(components)
 		slices.Reverse(components)
 	}
 
@@ -333,61 +224,46 @@ func (app *App) runStepComponents(step Step, components ...*Component) (err erro
 		if stepComponents.Contains(cmp) {
 			continue
 		}
+		stepComponents.Add(cmp)
 
-		fnc, err = cmp.stepFunc(step)
-		if err != nil {
-			return fmt.Errorf("[compogo][%s][%s]: %w", app.name, step, err)
-		}
-
-		if fnc == nil {
+		if !cmp.Steps.Has(step) {
 			continue
 		}
 
-		if err := fnc(app.container); err != nil {
-			return err
+		f, _ := cmp.Steps.Get(step)
+		app.logger.Debugf("component '%s' executing step '%s'", cmp.Name, step)
+
+		if step == Wait {
+			app.wgErr.Go(func() error {
+				return f(app.container)
+			})
+
+			continue
 		}
 
-		stepComponents.Add(cmp)
+		if err = f(app.container); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// serveComponent запускает Wait-функцию компонента в отдельной горутине.
-// Использует sync.WaitGroup для отслеживания завершения всех Wait-функций.
-// При панике или ошибке отправляет сообщение в канал chainErr.
-func (app *App) serveComponent(ctx context.Context, cmp *Component, waitComponents set.Set[*Component], chainErr chan error) {
-	app.waitMutex.Lock()
-	defer app.waitMutex.Unlock()
-
-	app.wg.Go(func(ctx context.Context, cmp *Component, waitComponents set.Set[*Component]) func() {
-		return func() {
-			defer func() {
-				app.waitMutex.Lock()
-				defer app.waitMutex.Unlock()
-				waitComponents.Remove(cmp)
-			}()
-
-			defer func() {
-				if r := recover(); r != nil {
-					chainErr <- fmt.Errorf("component '%s' wait failed: %s", cmp.Name, r)
-				}
-			}()
-
-			ctx, cancelFunc := context.WithCancel(ctx)
-			defer cancelFunc()
-
-			if err := cmp.Wait(ctx, app.container); err != nil {
-				chainErr <- fmt.Errorf("component '%s' wait failed: %w", cmp.Name, err)
-			}
-		}
-	}(ctx, cmp, waitComponents))
-}
-
 // getAllComponents возвращает все компоненты приложения, включая системные,
 // пользовательские и компоненты родительского приложения.
 func (app *App) getAllComponents() []*Component {
-	components := app.getCoreComponents()
+	var components []*Component
+
+	if app.parent == nil {
+		components = append(
+			components,
+			app.flagCmp,
+			app.configuratorCmp,
+			app.containerCmp,
+			app.closerCmp,
+			app.loggerCmp,
+		)
+	}
 
 	if app.parent != nil {
 		components = append(components, app.parent.getAllComponents()...)
@@ -404,6 +280,12 @@ func (app *App) setRunning(isRunning bool) {
 		app.parent.setRunning(isRunning)
 	}
 
+	if len(app.children) > 0 {
+		for _, child := range app.children {
+			child.setRunning(isRunning)
+		}
+	}
+
 	app.isRunning.Store(isRunning)
 }
 
@@ -418,38 +300,6 @@ func (app *App) IsRunning() bool {
 	return app.isRunning.Load()
 }
 
-// validate проверяет, что все необходимые зависимости приложения инициализированы.
-// Возвращает агрегированную ошибку, если чего-то не хватает.
-func (app *App) validate() error {
-	var err error
-
-	if app.parent != nil {
-		return app.parent.validate()
-	}
-
-	if app.container == nil {
-		err = fmt.Errorf("%w%w\n", err, ContainerUndefinedError)
-	}
-
-	if app.configurator == nil {
-		err = fmt.Errorf("%w%w\n", err, ConfiguratorUndefinedError)
-	}
-
-	if app.closer == nil {
-		err = fmt.Errorf("%w%w\n", err, CloserUndefinedError)
-	}
-
-	if app.logger == nil {
-		err = fmt.Errorf("%w%w\n", err, LoggerUndefinedError)
-	}
-
-	if err != nil {
-		err = fmt.Errorf("[compogo][%s]%w", app.name, err)
-	}
-
-	return err
-}
-
 // Clone создаёт дочернее приложение с указанным именем.
 // Дочернее приложение наследует от родителя:
 //   - DI-контейнер
@@ -460,39 +310,19 @@ func (app *App) validate() error {
 // Используется для создания модульных приложений, где каждый модуль
 // может иметь свои компоненты, но разделяет общие сервисы.
 func (app *App) Clone(name string) *App {
-	return &App{
+	clone := &App{
 		name:         fmt.Sprintf("%s.%s", app.name, name),
-		appComponent: app.appComponent,
 		config:       app.config,
 		container:    app.container,
 		configurator: app.configurator,
 		closer:       app.closer,
-		logger:       app.logger.GetLogger("compogo").GetLogger(app.name).GetLogger(name),
+		logger:       app.logger.GetLogger(name),
 		parent:       app,
 		components:   hashSlice.NewHashSlice[*Component](),
 		steps:        app.steps,
 	}
-}
 
-// getCoreComponents возвращает системные компоненты приложения.
-// Эти компоненты всегда выполняются первыми.
-func (app *App) getCoreComponents() []*Component {
-	if app.configCmp == nil {
-		return nil
-	}
+	app.children = append(app.children, clone)
 
-	return []*Component{
-		app.configuratorCmp,
-		app.containerCmp,
-		app.configCmp,
-		app.closerCmp,
-		app.loggerCmp,
-		app.appComponent,
-	}
-}
-
-// StartTime возвращает время запуска приложения.
-// Полезно для метрик и мониторинга uptime.
-func (app *App) StartTime() time.Time {
-	return app.startTime
+	return clone
 }

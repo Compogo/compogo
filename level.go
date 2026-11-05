@@ -1,24 +1,13 @@
 package compogo
 
-import (
-	"github.com/Compogo/types/mapper"
-	"github.com/Compogo/types/set"
-)
-
-//go:generate stringer -type=Level
+//go:generate stringer -type=Level -linecomment
 
 const (
-	Panic Level = iota
-	Error
-	Warn
-	Info
-	Debug
+	Panic Level = iota // panic
+	Error              // error
+	Warn               // warn
+	Info               // info
+	Debug              // debug
 )
 
 type Level uint8
-
-var AllLevels = mapper.NewMapper[Level](Panic, Error, Warn, Info, Debug)
-
-var AllErrorLevels = set.NewSet[Level](Panic, Error, Warn)
-
-var AllInfoLevels = set.NewSet[Level](Info, Debug)

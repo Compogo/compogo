@@ -52,7 +52,7 @@ func NewHTTPServerConfig() *HTTPServerConfig {
 	return &HTTPServerConfig{}
 }
 
-func HTTPServerConfiguration(config *HTTPServerConfig, compogo.configurator Configurator) *HTTPServerConfig {
+func HTTPServerConfiguration(config *HTTPServerConfig, configurator compogo.Configurator) *HTTPServerConfig {
 	if config.Addr == "" {
 		configurator.SetDefault(HTTPServerAddrFieldName, HTTPServerAddrDefault)
 		config.Addr = configurator.GetString(HTTPServerAddrFieldName)
@@ -93,17 +93,19 @@ func (s *HTTPServer) Process(ctx context.Context) (err error) {
 
 var HTTPServerComponent = compogo.Component{
 	Name: "http_server",
-	Init: compogo.StepFunc(func(container compogo.Container) error {
-		return container.Provides(NewHTTPServerConfig, NewHTTPServer)
-	}),
-	Configuration: compogo.StepFunc(func(container compogo.Container) error {
-		return container.Invoke(HTTPServerConfiguration)
-	}),
-	Wait: compogo.WaitFunc(func(ctx context.Context, container compogo.Container) error {
-		return container.Invoke(func(httpServer *HTTPServer) error {
-			return httpServer.Process(ctx)
-		})
-	}),
+	Steps: linker.NewLinker[compogo.Step, compogo.StepFunc](
+        linker.Link[compogo.Step, compogo.StepFunc](compogo.Init, func(container compogo.Container) error {
+            return container.Provides(NewHTTPServerConfig, NewHTTPServer)
+        }),
+        linker.Link[compogo.Step, compogo.StepFunc](compogo.Configuration, func(container compogo.Container) error {
+            return container.Invoke(HTTPServerConfiguration)
+        }),
+        linker.Link[compogo.Step, compogo.StepFunc](compogo.Wait, func(container compogo.Container) error {
+            return container.Invoke(func(closer compogo.Closer, httpServer *HTTPServer) error {
+                return httpServer.Process(closer.GetContext())
+            })
+        }),
+	),
 }
 ```
 
@@ -115,19 +117,23 @@ App управляет жизненным циклом всех компонен
 import "github.com/Compogo/compogo"
 
 func main() {
-    // 1. Создание приложения
-    app := compogo.NewApp("myapp")
-
-    // 2. Добавление компонентов
+    // Привязка флагов 
+    flagSet := pflag.NewFlagSet("myapp", pflag.ExitOnError)
+	
+    // Создание приложения
+    app, err := compogo.NewApp("myapp", compogo.WithFlagSet(flagSet))
+    if err != nil {
+        panic(err)		
+    }
+	
+    // Добавление компонентов
     app.AddComponents(
         dbComponent,
         httpComponent,
         metricsComponent,
     )
-
-    // 3. Привязка флагов
-    flagSet := pflag.NewFlagSet("myapp", pflag.ExitOnError)
-    if err := app.BindFlags(flagSet); err != nil {
+	
+    if err := app.BindFlags(); err != nil {
         log.Fatal(err)
     }
     flagSet.Parse(os.Args[1:])
@@ -203,13 +209,12 @@ type Closer interface {
 
 ```go
 closer := compogo.NewCloserOsSignal()
-go closer.Serve() // ожидание SIGINT, SIGTERM, SIGABRT
 ```
 
 ### Функциональные опции
 
 ```go
-app := compogo.NewApp("myapp",
+app, err := compogo.NewApp("myapp",
     // Обязательные опции
     compogo.WithContainer(container, containerCmp),
     compogo.WithConfigurator(configurator, configuratorCmp),
@@ -229,7 +234,7 @@ app := compogo.NewApp("myapp",
 Для модульной архитектуры:
 
 ```go
-mainApp := compogo.NewApp("main")
+mainApp, err := compogo.NewApp("main")
 apiModule := mainApp.Clone("api")
 apiModule.AddComponents(apiComponents...)
 ```
@@ -240,12 +245,9 @@ apiModule.AddComponents(apiComponents...)
 
 ```go
 type Config struct {
-    Cluster       string // Kubernetes cluster name
-    Namespace     string // Kubernetes namespace
-    ContainerId   string // Container ID
-    ContainerName string // Container name
-    Hostname      string // Hostname
-    PID           uint64 // Process ID (автоматически)
+    Name      string
+    StartTime time.Time
+    PID       uint64
 }
 ```
 
@@ -262,7 +264,7 @@ const (
 
 ### Лицензия
 
-```plantuml
+```text
 MIT License
 
 Copyright (c) 2026 Compogo

@@ -3,43 +3,43 @@ package compogo
 // Panicer определяет интерфейс для логирования паник и критических ошибок.
 // Используется для сообщений, после которых приложение должно завершиться.
 type Panicer interface {
-	Panicf(string, ...interface{})
-	Panic(...interface{})
+	Panicf(string, ...any)
+	Panic(...any)
 }
 
 // Errorer определяет интерфейс для логирования ошибок.
 // Используется для сообщений об ошибках, которые не должны приводить к панике.
 type Errorer interface {
-	Errorf(string, ...interface{})
-	Error(...interface{})
+	Errorf(string, ...any)
+	Error(...any)
 }
 
 // Warner определяет интерфейс для логирования предупреждений.
 // Используется для сообщений о потенциальных проблемах, которые не являются ошибками.
 type Warner interface {
-	Warnf(string, ...interface{})
-	Warn(...interface{})
+	Warnf(string, ...any)
+	Warn(...any)
 }
 
 // Informer определяет интерфейс для логирования информационных сообщений.
 // Используется для сообщений о нормальном ходе выполнения приложения.
 type Informer interface {
-	Infof(string, ...interface{})
-	Info(...interface{})
+	Infof(string, ...any)
+	Info(...any)
 }
 
 // Debuger определяет интерфейс для логирования отладочных сообщений.
 // Используется для детальной диагностики и отладки приложения.
 type Debuger interface {
-	Debugf(string, ...interface{})
-	Debug(...interface{})
+	Debugf(string, ...any)
+	Debug(...any)
 }
 
 // Printer определяет интерфейс для простого вывода сообщений.
 // Используется для вывода без дополнительных уровней логирования.
 type Printer interface {
-	Printf(string, ...interface{})
-	Print(...interface{})
+	Printf(string, ...any)
+	Print(...any)
 }
 
 // Logger объединяет все интерфейсы логирования и предоставляет
@@ -79,5 +79,6 @@ type Logger interface {
 	//	appLogger := logger.GetLogger("app")
 	//	dbLogger := appLogger.GetLogger("database")
 	//	dbLogger.Info("Connected to database")
-	GetLogger(name string) Logger
+	GetLogger(string) Logger
+	WithField(string, any) Logger
 }

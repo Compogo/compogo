@@ -66,12 +66,17 @@ func (closer *CloserOsSignal) IsClosed() bool {
 //	go closer.Serve()
 //	<-closer.GetContext().Done()
 //	// приложение завершается
-func (closer *CloserOsSignal) Serve() {
+func (closer *CloserOsSignal) serve() {
+	defer closer.Close()
+	defer signal.Stop(closer.exitSignal)
+
 	signal.Notify(closer.exitSignal, syscall.SIGINT, syscall.SIGTERM, syscall.SIGABRT)
 
-	<-closer.exitSignal
-
-	_ = closer.Close()
+	select {
+	case <-closer.GetContext().Done():
+	case <-closer.exitSignal:
+		return
+	}
 }
 
 // WithOsSignalCloser возвращает Option для добавления CloserOsSignal в приложение.
@@ -90,18 +95,18 @@ func (closer *CloserOsSignal) Serve() {
 func WithOsSignalCloser() Option {
 	closer := NewCloserOsSignal()
 
-	return WithCloser(closer, &Component{
-		Name: "closer.OsSignal",
-		Init: StepFunc(func(container Container) error {
+	return WithCloser(closer, NewComponent(
+		"closer.OsSignal",
+		WithInit(func(container Container) error {
 			return container.Provides(
 				func() *CloserOsSignal { return closer },
 				func(cl *CloserOsSignal) Closer { return cl },
 			)
 		}),
-		Wait: WaitFunc(func(_ context.Context, container Container) error {
+		WithWait(func(container Container) error {
 			return container.Invoke(func(cl *CloserOsSignal) {
-				cl.Serve()
+				cl.serve()
 			})
 		}),
-	})
+	))
 }
